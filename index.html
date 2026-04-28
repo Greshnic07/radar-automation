@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>DODO TV RADAR</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            background: url('фон.jpg') no-repeat center center fixed;
+            background-size: cover;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden; /* Запрещаем любую прокрутку */
+            display: flex;
+            flex-direction: column;
+            padding: 2vh;
+        }
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2vw;
+            height: 100%;
+        }
+        .column {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .header {
+            height: 8vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 5vh;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.7);
+            text-transform: uppercase;
+            margin-bottom: 1vh;
+        }
+        .card-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2vh;
+            min-height: 0; /* Важно для flex-контейнеров */
+        }
+        .card {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border: 0.6vh solid #ff6900; /* Жирная оранжевая рамка */
+            border-radius: 3vh;
+            padding: 2vh;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1vh;
+            flex-shrink: 0;
+        }
+        .author-info { max-width: 65%; }
+        .author { font-size: 3.5vh; font-weight: bold; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .location { font-size: 1.8vh; color: #555; }
+        .stars { font-size: 4vh; color: #ffcc00; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
+
+        .badge {
+            background: #ff6900; color: white;
+            padding: 0.4vh 1.5vh; border-radius: 1vh;
+            font-size: 1.6vh; font-weight: bold;
+            display: inline-block; margin-bottom: 1vh;
+            align-self: flex-start;
+        }
+
+        /* КОНТЕЙНЕР ДЛЯ ТЕКСТА, КОТОРЫЙ УМЕЕТ УМЕНЬШАТЬ ШРИФТ */
+        .text-area {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            align-items: center; /* Центрируем короткие отзывы по вертикали */
+        }
+        .review-text {
+            width: 100%;
+            font-size: 3vh; /* Базовый размер, который будет уменьшаться */
+            line-height: 1.3;
+            color: #111;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="column">
+            <div class="header">ЯНДЕКС КАРТЫ</div>
+            <div class="card-wrapper">
+                <div class="card">
+                    <div class="badge">ПОСЛЕДНИЙ</div>
+                    <div class="card-header">
+                        <div class="author-info"><span class="author" id="y1-author">...</span><span class="location" id="y1-loc">...</span></div>
+                        <div class="stars" id="y1-stars"></div>
+                    </div>
+                    <div class="text-area"><div class="review-text" id="y1-text">Загрузка...</div></div>
+                </div>
+                <div class="card">
+                    <div class="badge" style="background:#666">ПРЕДПОСЛЕДНИЙ</div>
+                    <div class="card-header">
+                        <div class="author-info"><span class="author" id="y2-author">...</span><span class="location" id="y2-loc">...</span></div>
+                        <div class="stars" id="y2-stars"></div>
+                    </div>
+                    <div class="text-area"><div class="review-text" id="y2-text">Загрузка...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="header">2ГИС</div>
+            <div class="card-wrapper">
+                <div class="card">
+                    <div class="badge">ПОСЛЕДНИЙ</div>
+                    <div class="card-header">
+                        <div class="author-info"><span class="author" id="g1-author">...</span><span class="location" id="g1-loc">...</span></div>
+                        <div class="stars" id="g1-stars"></div>
+                    </div>
+                    <div class="text-area"><div class="review-text" id="g1-text">Загрузка...</div></div>
+                </div>
+                <div class="card">
+                    <div class="badge" style="background:#666">ПРЕДПОСЛЕДНИЙ</div>
+                    <div class="card-header">
+                        <div class="author-info"><span class="author" id="g2-author">...</span><span class="location" id="g2-loc">...</span></div>
+                        <div class="stars" id="g2-stars"></div>
+                    </div>
+                    <div class="text-area"><div class="review-text" id="g2-text">Загрузка...</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ФУНКЦИЯ «УШИВАНИЯ» ТЕКСТА ПОД РАЗМЕР КАРТОЧКИ
+        function fitText(el) {
+            let fontSize = 3; // Начинаем с 3vh
+            el.style.fontSize = fontSize + "vh";
+            const parent = el.parentElement;
+            
+            // Если текст выше чем его контейнер - уменьшаем по 0.1vh
+            while (el.scrollHeight > parent.clientHeight && fontSize > 1.5) {
+                fontSize -= 0.1;
+                el.style.fontSize = fontSize + "vh";
+            }
+        }
+
+        async function update() {
+            try {
+                const response = await fetch('tv_data.json?t=' + Date.now());
+                const data = await response.json();
+                
+                const map = [
+                    {id: 'y1', d: data.yandex[0]}, {id: 'y2', d: data.yandex[1]},
+                    {id: 'g1', d: data.gis[0]},    {id: 'g2', d: data.gis[1]}
+                ];
+
+                map.forEach(m => {
+                    if (m.d) {
+                        document.getElementById(m.id + '-author').innerText = m.d.author;
+                        document.getElementById(m.id + '-loc').innerText = m.d.location;
+                        document.getElementById(m.id + '-stars').innerText = m.d.stars;
+                        
+                        const textEl = document.getElementById(m.id + '-text');
+                        textEl.innerText = m.d.text;
+                        
+                        // Даем браузеру отрисовать и подгоняем размер
+                        setTimeout(() => fitText(textEl), 50);
+                    }
+                });
+            } catch(e) { console.log("Waiting for json..."); }
+        }
+
+        setInterval(update, 30000);
+        update();
+    </script>
+</body>
+</html>
