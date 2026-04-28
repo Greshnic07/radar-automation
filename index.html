@@ -17,20 +17,21 @@
             flex-direction: column;
             padding: 2vh;
         }
-        /* Блок со временем обновления под лого */
+        /* ЧЕРНЫМ ПО БЕЛОМУ - МАКСИМАЛЬНО ЧИТАБЕЛЬНО */
         .update-info {
             position: absolute;
-            top: 7vh;
+            top: 6.5vh;
             left: 50%;
             transform: translateX(-50%);
-            color: #ff4444; /* Красный, как ты просил */
-            font-size: 2vh;
-            font-weight: bold;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-            background: rgba(255, 255, 255, 0.8);
-            padding: 0.5vh 2vw;
+            color: #000000; 
+            font-size: 2.2vh;
+            font-weight: 900; /* Самый жирный */
+            background: #ffffff;
+            padding: 0.8vh 2.5vw;
             border-radius: 1vh;
+            border: 3px solid #000000;
             z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         .main-container {
             display: grid;
@@ -39,11 +40,7 @@
             height: 100%;
             margin-top: 2vh;
         }
-        .column {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
+        .column { display: flex; flex-direction: column; height: 100%; }
         .header {
             height: 8vh;
             display: flex;
@@ -52,17 +49,11 @@
             font-size: 5vh;
             font-weight: 900;
             color: white;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.7);
+            text-shadow: 0 4px 10px rgba(0,0,0,0.8);
             text-transform: uppercase;
             margin-bottom: 1vh;
         }
-        .card-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 2vh;
-            min-height: 0;
-        }
+        .card-wrapper { flex: 1; display: flex; flex-direction: column; gap: 2vh; min-height: 0; }
         .card {
             flex: 1;
             background: rgba(255, 255, 255, 0.95);
@@ -74,44 +65,19 @@
             min-height: 0; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.4);
         }
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1vh;
-            flex-shrink: 0;
-        }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1vh; flex-shrink: 0; }
         .author-info { max-width: 65%; }
         .author { font-size: 3.5vh; font-weight: bold; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
         .location { font-size: 1.8vh; color: #555; }
         .stars { font-size: 4vh; color: #ffcc00; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
-
-        .badge {
-            background: #ff6900; color: white;
-            padding: 0.4vh 1.5vh; border-radius: 1vh;
-            font-size: 1.6vh; font-weight: bold;
-            display: inline-block; margin-bottom: 1vh;
-            align-self: flex-start;
-        }
-
-        .text-area {
-            flex: 1;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-        }
-        .review-text {
-            width: 100%;
-            font-size: 3vh;
-            line-height: 1.3;
-            color: #111;
-            word-wrap: break-word;
-        }
+        .badge { background: #ff6900; color: white; padding: 0.4vh 1.5vh; border-radius: 1vh; font-size: 1.6vh; font-weight: bold; display: inline-block; margin-bottom: 1vh; align-self: flex-start; }
+        .text-area { flex: 1; overflow: hidden; display: flex; align-items: center; }
+        .review-text { width: 100%; font-size: 3vh; line-height: 1.3; color: #111; word-wrap: break-word; }
     </style>
 </head>
 <body>
 
-    <div class="update-info" id="last-update">Обновление...</div>
+    <div class="update-info" id="last-update">ОБНОВЛЕНИЕ...</div>
 
     <div class="main-container">
         <div class="column">
@@ -175,11 +141,10 @@
                 const response = await fetch('tv_data.json?t=' + Date.now());
                 const data = await response.json();
                 
-                // Ставим время обновления
-                const now = new Date();
-                const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
-                                now.getMinutes().toString().padStart(2, '0');
-                document.getElementById('last-update').innerText = "ОБНОВЛЕНО В " + timeStr;
+                // БЕРЕМ ВРЕМЯ ИЗ ФАЙЛА, А НЕ ИЗ ГОЛОВЫ
+                if (data.last_update) {
+                    document.getElementById('last-update').innerText = "ДАННЫЕ ОТ " + data.last_update;
+                }
 
                 const yandexList = Array.isArray(data.yandex) ? data.yandex : [];
                 const gisList = Array.isArray(data.gis) ? data.gis : [];
@@ -201,9 +166,7 @@
                         setTimeout(() => fitText(textEl), 50);
                     }
                 });
-            } catch(e) { 
-                console.error("Ошибка загрузки данных:", e); 
-            }
+            } catch(e) { console.error("Ошибка:", e); }
         }
 
         update();
