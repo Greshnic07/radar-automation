@@ -3,9 +3,8 @@ name: Radar Automation
 on:
   workflow_dispatch: # ВОТ ЭТА СТРОЧКА ВКЛЮЧАЕТ КНОПКУ
 
-  schedule:
-    - cron: '57 9 * * *'
-    - cron: '57 13 * * *'
+schedule:
+    - cron: '0 * * * *' # Запуск ровно в начале каждого часа
 
 jobs:
   run-radar:
