@@ -1,188 +1,98 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>DODO TV RADAR</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; padding: 0;
-            width: 100vw; height: 100vh;
-            background: url('фон.jpg') no-repeat center center fixed;
-            background-size: cover;
-            font-family: 'Arial', sans-serif;
-            overflow: hidden; /* Запрещаем любую прокрутку */
-            display: flex;
-            flex-direction: column;
-            padding: 2vh;
-        }
-        .main-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2vw;
-            height: 100%;
-        }
-        .column {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-        .header {
-            height: 8vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 5vh;
-            font-weight: 900;
-            color: white;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.7);
-            text-transform: uppercase;
-            margin-bottom: 1vh;
-        }
-        .card-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 2vh;
-            min-height: 0; /* Важно для flex-контейнеров */
-        }
-        .card {
-            flex: 1;
-            background: rgba(255, 255, 255, 0.95);
-            border: 0.6vh solid #ff6900; /* Жирная оранжевая рамка */
-            border-radius: 3vh;
-            padding: 2vh;
-            display: flex;
-            flex-direction: column;
-            min-height: 0; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-        }
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 1vh;
-            flex-shrink: 0;
-        }
-        .author-info { max-width: 65%; }
-        .author { font-size: 3.5vh; font-weight: bold; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        .location { font-size: 1.8vh; color: #555; }
-        .stars { font-size: 4vh; color: #ffcc00; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
+import os
+import json
+import hashlib
+import time
+from datetime import datetime
+from playwright.sync_api import sync_playwright
 
-        .badge {
-            background: #ff6900; color: white;
-            padding: 0.4vh 1.5vh; border-radius: 1vh;
-            font-size: 1.6vh; font-weight: bold;
-            display: inline-block; margin-bottom: 1vh;
-            align-self: flex-start;
-        }
+# --- НАСТРОЙКИ (БЕРУТСЯ ИЗ СЕКРЕТОВ GITHUB) ---
+LOGIN = os.environ.get("MY_LOGIN")
+PASSWORD = os.environ.get("MY_PASSWORD")
+# Если парсим Додо ИС, используем TOTP
+import pyotp
+TOTP_SECRET = os.environ.get("MY_TOTP")
 
-        /* КОНТЕЙНЕР ДЛЯ ТЕКСТА, КОТОРЫЙ УМЕЕТ УМЕНЬШАТЬ ШРИФТ */
-        .text-area {
-            flex: 1;
-            overflow: hidden;
-            display: flex;
-            align-items: center; /* Центрируем короткие отзывы по вертикали */
-        }
-        .review-text {
-            width: 100%;
-            font-size: 3vh; /* Базовый размер, который будет уменьшаться */
-            line-height: 1.3;
-            color: #111;
-            word-wrap: break-word;
-        }
-    </style>
-</head>
-<body>
+HASH_FILE = "reviews_hashes_combo.txt"
+DATA_FILE = "reviews.json"
 
-    <div class="main-container">
-        <div class="column">
-            <div class="header">ЯНДЕКС КАРТЫ</div>
-            <div class="card-wrapper">
-                <div class="card">
-                    <div class="badge">ПОСЛЕДНИЙ</div>
-                    <div class="card-header">
-                        <div class="author-info"><span class="author" id="y1-author">...</span><span class="location" id="y1-loc">...</span></div>
-                        <div class="stars" id="y1-stars"></div>
-                    </div>
-                    <div class="text-area"><div class="review-text" id="y1-text">Загрузка...</div></div>
-                </div>
-                <div class="card">
-                    <div class="badge" style="background:#666">ПРЕДПОСЛЕДНИЙ</div>
-                    <div class="card-header">
-                        <div class="author-info"><span class="author" id="y2-author">...</span><span class="location" id="y2-loc">...</span></div>
-                        <div class="stars" id="y2-stars"></div>
-                    </div>
-                    <div class="text-area"><div class="review-text" id="y2-text">Загрузка...</div></div>
-                </div>
-            </div>
-        </div>
+def get_hash(text):
+    """Создает уникальный ID для текста отзыва"""
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
 
-        <div class="column">
-            <div class="header">2ГИС</div>
-            <div class="card-wrapper">
-                <div class="card">
-                    <div class="badge">ПОСЛЕДНИЙ</div>
-                    <div class="card-header">
-                        <div class="author-info"><span class="author" id="g1-author">...</span><span class="location" id="g1-loc">...</span></div>
-                        <div class="stars" id="g1-stars"></div>
-                    </div>
-                    <div class="text-area"><div class="review-text" id="g1-text">Загрузка...</div></div>
-                </div>
-                <div class="card">
-                    <div class="badge" style="background:#666">ПРЕДПОСЛЕДНИЙ</div>
-                    <div class="card-header">
-                        <div class="author-info"><span class="author" id="g2-author">...</span><span class="location" id="g2-loc">...</span></div>
-                        <div class="stars" id="g2-stars"></div>
-                    </div>
-                    <div class="text-area"><div class="review-text" id="g2-text">Загрузка...</div></div>
-                </div>
-            </div>
-        </div>
-    </div>
+def load_hashes():
+    if os.path.exists(HASH_FILE):
+        with open(HASH_FILE, "r") as f:
+            return set(line.strip() for line in f)
+    return set()
 
-    <script>
-        // ФУНКЦИЯ «УШИВАНИЯ» ТЕКСТА ПОД РАЗМЕР КАРТОЧКИ
-        function fitText(el) {
-            let fontSize = 3; // Начинаем с 3vh
-            el.style.fontSize = fontSize + "vh";
-            const parent = el.parentElement;
+def save_new_hash(new_hash):
+    with open(HASH_FILE, "a") as f:
+        f.write(new_hash + "\n")
+
+def run():
+    print(f"[{datetime.now()}] Запуск сбора отзывов для Додо Пицца...")
+    
+    existing_hashes = load_hashes()
+    new_reviews_found = []
+
+    with sync_playwright() as p:
+        # headless=True важно для GitHub Actions
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        try:
+            # ТУТ ЛОГИКА ТВОЕГО ПАРСЕРА (Яндекс/2ГИС или Додо ИС)
+            # Пример захода на страницу отзывов:
+            page.goto("https://officemanager.dodois.io/Reports/UnitReviews") 
             
-            // Если текст выше чем его контейнер - уменьшаем по 0.1vh
-            while (el.scrollHeight > parent.clientHeight && fontSize > 1.5) {
-                fontSize -= 0.1;
-                el.style.fontSize = fontSize + "vh";
-            }
-        }
+            # Авторизация (если нужна)
+            if "login" in page.url:
+                page.fill("input[name='login']", LOGIN)
+                page.fill("input[name='password']", PASSWORD)
+                page.click("button[type='submit']")
+                # Если есть 2FA:
+                if TOTP_SECRET:
+                    totp = pyotp.TOTP(TOTP_SECRET)
+                    page.fill("input[name='code']", totp.now())
+                    page.keyboard.press("Enter")
+            
+            time.sleep(5) # Ждем прогрузки
 
-        async function update() {
-            try {
-                const response = await fetch('tv_data.json?t=' + Date.now());
-                const data = await response.json();
+            # СОБИРАЕМ ОТЗЫВЫ (пример селектора)
+            review_elements = page.locator(".review-card").all() 
+            
+            for el in review_elements:
+                text = el.inner_text()
+                h = get_hash(text)
                 
-                const map = [
-                    {id: 'y1', d: data.yandex[0]}, {id: 'y2', d: data.yandex[1]},
-                    {id: 'g1', d: data.gis[0]},    {id: 'g2', d: data.gis[1]}
-                ];
+                if h not in existing_hashes:
+                    print(f"Нашли новый отзыв: {h}")
+                    new_reviews_found.append({
+                        "id": h,
+                        "text": text,
+                        "date": datetime.now().strftime("%d.%m.%Y %H:%M")
+                    })
+                    save_new_hash(h)
 
-                map.forEach(m => {
-                    if (m.d) {
-                        document.getElementById(m.id + '-author').innerText = m.d.author;
-                        document.getElementById(m.id + '-loc').innerText = m.d.location;
-                        document.getElementById(m.id + '-stars').innerText = m.d.stars;
-                        
-                        const textEl = document.getElementById(m.id + '-text');
-                        textEl.innerText = m.d.text;
-                        
-                        // Даем браузеру отрисовать и подгоняем размер
-                        setTimeout(() => fitText(textEl), 50);
-                    }
-                });
-            } catch(e) { console.log("Waiting for json..."); }
-        }
+            if new_reviews_found:
+                # Загружаем старые отзывы из json и добавляем новые в начало
+                all_data = []
+                if os.path.exists(DATA_FILE):
+                    with open(DATA_FILE, "r", encoding="utf-8") as f:
+                        all_data = json.load(f)
+                
+                updated_data = new_reviews_found + all_data
+                # Оставляем только последние 20 отзывов, чтобы файл не раздувался
+                with open(DATA_FILE, "w", encoding="utf-8") as f:
+                    json.dump(updated_data[:20], f, ensure_ascii=False, indent=4)
+                print(f"Добавлено {len(new_reviews_found)} новых отзывов.")
+            else:
+                print("Новых отзывов не обнаружено.")
 
-        setInterval(update, 30000);
-        update();
-    </script>
-</body>
-</html>
+        except Exception as e:
+            print(f"Ошибка при парсинге: {e}")
+        finally:
+            browser.close()
+
+if __name__ == "__main__":
+    run()
