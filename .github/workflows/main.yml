@@ -2,7 +2,7 @@ name: Radar Automation
 
 on:
   schedule:
-    - cron: '38 * * * *'
+    - cron: '48 * * * *'
   workflow_dispatch:
 
 # ДОБАВЬ ЭТИ ТРИ СТРОЧКИ, ЧТОБЫ PUSH НЕ БЛОКИРОВАЛСЯ:
