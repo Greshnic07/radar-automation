@@ -1,18 +1,15 @@
 name: Radar Automation
 
 on:
-  workflow_dispatch: # Позволяет запускать скрипт вручную по кнопке
+  workflow_dispatch: # ВОТ ЭТА СТРОЧКА ВКЛЮЧАЕТ КНОПКУ
 
   schedule:
-    # ВАЖНО: Время тут указывается в UTC! 
-    # В Ижевске часовой пояс UTC+4. 
-    # Чтобы скрипт сработал в 13:57 по Ижевску, тут нужно написать 09:57.
     - cron: '57 9 * * *'
-    - cron: '57 13 * * *' # Это 17:57 по Ижевску
+    - cron: '57 13 * * *'
 
 jobs:
   run-radar:
-    runs-on: ubuntu-latest # Бесплатный линукс-сервер от GitHub
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -38,10 +35,10 @@ jobs:
           MY_TOTP: ${{ secrets.MY_TOTP }}
         run: python review_radar.py
 
-     - name: Commit and push changes
+      - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git commit -m "Update radar data" || echo "Нет изменений для сохранения"
-          git push || echo "Нечего пушить"
+          git commit -m "Update radar data" || echo "No changes"
+          git push || echo "Nothing to push"
