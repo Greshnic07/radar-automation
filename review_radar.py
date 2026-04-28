@@ -22,11 +22,12 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    print(f"[{datetime.now()}] Сбор данных (Убираем дубликаты)...")
+    print(f"[{datetime.now()}] Сбор данных (Сортируем по свежести)...")
     data = {"yandex": [], "gis": []}
 
     # 1. 2ГИС
     print("Собираем 2ГИС...")
+    all_gis = []
     for name, firm_id in LOCATIONS_2GIS.items():
         try:
             url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews?limit=1&key={API_KEY_2GIS}&locale=ru_RU"
@@ -34,13 +35,22 @@ def run():
             if r.status_code == 200:
                 revs = r.json().get("reviews", [])
                 if revs:
-                    data["gis"].append({
+                    all_gis.append({
                         "author": revs[0].get("user", {}).get("name", "Клиент"),
                         "location": name,
                         "stars": get_stars_emoji(revs[0].get("rating", 5)),
-                        "text": revs[0].get("text", "").replace("\n", " ")
+                        "text": revs[0].get("text", "").replace("\n", " "),
+                        "date": revs[0].get("date_created", "") # Достаем дату для сортировки
                     })
         except: continue
+    
+    # Сортируем все собранные отзывы по дате (самые свежие сверху)
+    all_gis.sort(key=lambda x: x["date"], reverse=True)
+    
+    # Берем только 2 самых новых и убираем из них служебное поле 'date', чтобы не мусорить
+    for item in all_gis[:2]:
+        item.pop("date", None)
+        data["gis"].append(item)
 
     # 2. ЯНДЕКС
     with sync_playwright() as p:
