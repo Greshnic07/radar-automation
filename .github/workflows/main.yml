@@ -2,10 +2,11 @@ name: Radar Automation
 
 on:
   schedule:
-    - cron: '48 * * * *'
+    # Запуск дважды в час: в 12 и 42 минуты. 
+    # Неровные числа помогают обходить очереди Гитхаба.
+    - cron: '12,42 * * * *'
   workflow_dispatch:
 
-# ДОБАВЬ ЭТИ ТРИ СТРОЧКИ, ЧТОБЫ PUSH НЕ БЛОКИРОВАЛСЯ:
 permissions:
   contents: write
 
@@ -15,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Обновил до v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # Обновил до v5
         with:
           python-version: '3.10'
 
@@ -41,6 +42,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -A
-          git commit -m "Update radar data" || echo "No changes"
-          git push || echo "Nothing to push"
+          git add tv_data.json # Добавляем конкретно наш файл с данными
+          git commit -m "Update radar data: $(date)" || echo "No changes"
+          git push
