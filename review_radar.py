@@ -196,60 +196,57 @@ def main():
                 tv_history = json.load(f)
         except: pass
 
-    while True:
-        driver = webdriver.Chrome(options=chrome_options)
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            existing_hashes = set(line.strip() for line in f)
+    # УБРАЛИ WHILE TRUE! ТЕПЕРЬ КОД ВЫПОЛНЯЕТСЯ РОВНО 1 РАЗ ЗА ЗАПУСК
+    driver = webdriver.Chrome(options=chrome_options)
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        existing_hashes = set(line.strip() for line in f)
 
-        print("\n--- 🟢 ПРОВЕРКА 2ГИС ---")
-        for name, firm_id in LOCATIONS_2GIS.items():
-            res = get_last_review_2gis(firm_id, name)
-            if res:
-                r_hash = hashlib.md5(f"2gis{name}{res['text']}".encode('utf-8')).hexdigest()
-                if r_hash not in existing_hashes:
-                    stars = get_stars_emoji(res["rating"])
-                    # Отправка в Телегу без лишних слов
-                    msg = f"<b>[2ГИС] {name}</b>\n{stars}\n👤 <b>{res['author']}</b>\n\n{res['text']}"
-                    send_telegram(msg)
-                    
-                    with open(DB_FILE, "a", encoding="utf-8") as f: f.write(f"{r_hash}\n")
-                    existing_hashes.add(r_hash)
-                    print(f"✅ [2ГИС] НОВЫЙ: {name}")
+    print("\n--- 🟢 ПРОВЕРКА 2ГИС ---")
+    for name, firm_id in LOCATIONS_2GIS.items():
+        res = get_last_review_2gis(firm_id, name)
+        if res:
+            r_hash = hashlib.md5(f"2gis{name}{res['text']}".encode('utf-8')).hexdigest()
+            if r_hash not in existing_hashes:
+                stars = get_stars_emoji(res["rating"])
+                msg = f"<b>[2ГИС] {name}</b>\n{stars}\n👤 <b>{res['author']}</b>\n\n{res['text']}"
+                send_telegram(msg)
+                
+                with open(DB_FILE, "a", encoding="utf-8") as f: f.write(f"{r_hash}\n")
+                existing_hashes.add(r_hash)
+                print(f"✅ [2ГИС] НОВЫЙ: {name}")
 
-                    # --- ЗАПИСЬ ДЛЯ ТЕЛЕВИЗОРА ---
-                    tv_history["gis"].insert(0, {"author": res["author"], "location": name, "stars": stars, "text": res["text"]})
-                    tv_history["gis"] = tv_history["gis"][:2] # Храним только 2 последних
-                    with open(TV_DATA_FILE, "w", encoding="utf-8") as json_file:
-                        json.dump(tv_history, json_file, ensure_ascii=False, indent=4)
-                else:
-                    print(f"🤷‍♂️ [2ГИС] Старый: {name}")
+                # --- ЗАПИСЬ ДЛЯ ТЕЛЕВИЗОРА ---
+                tv_history["gis"].insert(0, {"author": res["author"], "location": name, "stars": stars, "text": res["text"]})
+                tv_history["gis"] = tv_history["gis"][:2] 
+                with open(TV_DATA_FILE, "w", encoding="utf-8") as json_file:
+                    json.dump(tv_history, json_file, ensure_ascii=False, indent=4)
+            else:
+                print(f"🤷‍♂️ [2ГИС] Старый: {name}")
 
-        print("\n--- 🔴 ПРОВЕРКА ЯНДЕКС ---")
-        for name, url in LOCATIONS_YANDEX.items():
-            res = get_last_review_yandex(driver, url, name)
-            if res:
-                r_hash = hashlib.md5(f"yandex{name}{res['text']}".encode('utf-8')).hexdigest()
-                if r_hash not in existing_hashes:
-                    stars = get_stars_emoji(res["rating"])
-                    # Отправка в Телегу без лишних слов
-                    msg = f"<b>[Яндекс] {name}</b>\n{stars}\n👤 <b>{res['author']}</b>\n\n{res['text']}"
-                    send_telegram(msg)
-                    
-                    with open(DB_FILE, "a", encoding="utf-8") as f: f.write(f"{r_hash}\n")
-                    existing_hashes.add(r_hash)
-                    print(f"✅ [ЯНДЕКС] НОВЫЙ: {name}")
+    print("\n--- 🔴 ПРОВЕРКА ЯНДЕКС ---")
+    for name, url in LOCATIONS_YANDEX.items():
+        res = get_last_review_yandex(driver, url, name)
+        if res:
+            r_hash = hashlib.md5(f"yandex{name}{res['text']}".encode('utf-8')).hexdigest()
+            if r_hash not in existing_hashes:
+                stars = get_stars_emoji(res["rating"])
+                msg = f"<b>[Яндекс] {name}</b>\n{stars}\n👤 <b>{res['author']}</b>\n\n{res['text']}"
+                send_telegram(msg)
+                
+                with open(DB_FILE, "a", encoding="utf-8") as f: f.write(f"{r_hash}\n")
+                existing_hashes.add(r_hash)
+                print(f"✅ [ЯНДЕКС] НОВЫЙ: {name}")
 
-                    # --- ЗАПИСЬ ДЛЯ ТЕЛЕВИЗОРА ---
-                    tv_history["yandex"].insert(0, {"author": res["author"], "location": name, "stars": stars, "text": res["text"]})
-                    tv_history["yandex"] = tv_history["yandex"][:2] # Храним только 2 последних
-                    with open(TV_DATA_FILE, "w", encoding="utf-8") as json_file:
-                        json.dump(tv_history, json_file, ensure_ascii=False, indent=4)
-                else:
-                    print(f"🤷‍♂️ [ЯНДЕКС] Старый: {name}")
+                # --- ЗАПИСЬ ДЛЯ ТЕЛЕВИЗОРА ---
+                tv_history["yandex"].insert(0, {"author": res["author"], "location": name, "stars": stars, "text": res["text"]})
+                tv_history["yandex"] = tv_history["yandex"][:2] 
+                with open(TV_DATA_FILE, "w", encoding="utf-8") as json_file:
+                    json.dump(tv_history, json_file, ensure_ascii=False, indent=4)
+            else:
+                print(f"🤷‍♂️ [ЯНДЕКС] Старый: {name}")
 
-        driver.quit()
-        print(f"\n💤 Все точки проверены. Спим {CHECK_INTERVAL // 60} мин...\n")
-        time.sleep(CHECK_INTERVAL)
+    driver.quit()
+    print("\n✅ Сбор данных завершен. GitHub сейчас сохранит файлы для телевизора!")
 
 if __name__ == "__main__":
     main()
