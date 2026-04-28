@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta # Добавил timedelta для коррекции времени
 from playwright.sync_api import sync_playwright
 import requests
 
@@ -22,8 +22,14 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    print(f"[{datetime.now()}] Сбор данных (Сортируем по свежести)...")
-    data = {"yandex": [], "gis": []}
+    # Фиксируем время начала парсинга (UTC+4 для Ижевска/Сарапула)
+    now = datetime.now() + timedelta(hours=4)
+    update_time = now.strftime("%H:%M")
+    
+    print(f"[{update_time}] Сбор данных (Сортируем по свежести)...")
+    
+    # Сюда добавим поле last_update в конце
+    data = {"yandex": [], "gis": [], "last_update": update_time}
 
     # 1. 2ГИС
     print("Собираем 2ГИС...")
@@ -40,14 +46,12 @@ def run():
                         "location": name,
                         "stars": get_stars_emoji(revs[0].get("rating", 5)),
                         "text": revs[0].get("text", "").replace("\n", " "),
-                        "date": revs[0].get("date_created", "") # Достаем дату для сортировки
+                        "date": revs[0].get("date_created", "") 
                     })
         except: continue
     
-    # Сортируем все собранные отзывы по дате (самые свежие сверху)
     all_gis.sort(key=lambda x: x["date"], reverse=True)
     
-    # Берем только 2 самых новых и убираем из них служебное поле 'date', чтобы не мусорить
     for item in all_gis[:2]:
         item.pop("date", None)
         data["gis"].append(item)
@@ -68,7 +72,6 @@ def run():
             
             page.wait_for_timeout(5000)
             
-            # Нажимаем кнопки "Ещё"
             page.evaluate("""() => {
                 let reviews = document.querySelectorAll('.business-review-view');
                 reviews.forEach(review => {
@@ -82,31 +85,24 @@ def run():
             print("✅ Кнопки 'Ещё' нажаты")
             page.wait_for_timeout(2000)
 
-            # Собираем с запасом (5 штук), чтобы было из чего фильтровать
             extracted = page.evaluate("""() => {
                 let results = [];
                 let cards = document.querySelectorAll('.business-review-view, .business-reviews-card-view__review');
                 for (let i = 0; i < Math.min(5, cards.length); i++) {
                     let card = cards[i];
-                    
                     let authorEl = card.querySelector('.business-review-view__author-name') || card.querySelector('[itemprop="name"]');
                     let author = authorEl ? authorEl.innerText.trim() : "Клиент";
-                    
                     let textEl = card.querySelector('[itemprop="reviewBody"]') || 
                                  card.querySelector('.business-review-view__body-text') || 
                                  card.querySelector('.business-review-view__text') || 
                                  card.querySelector('.business-reviews-card-view__review-text');
-                                 
                     let text = textEl ? textEl.innerText.trim() : "";
-                    
                     if (!text) {
                          text = card.innerText.replace(author, '').trim().substring(0, 350) + "...";
                     }
-
                     let rating = "5";
                     let ratingMeta = card.querySelector('meta[itemprop="ratingValue"]');
                     if (ratingMeta) { rating = ratingMeta.getAttribute('content'); }
-                    
                     results.push({author, text, rating}); 
                 }
                 return results;
@@ -116,11 +112,8 @@ def run():
                 seen_texts = set()
                 for res in extracted:
                     if len(data["yandex"]) >= 2:
-                        break # Хватит двух уникальных для экрана
-                        
+                        break
                     clean_text = res['text'].replace('\n', ' ').strip()
-                    
-                    # ПРОВЕРКА НА ДУБЛИКАТ
                     if clean_text and clean_text not in seen_texts:
                         seen_texts.add(clean_text)
                         data["yandex"].append({
@@ -130,7 +123,7 @@ def run():
                             "text": clean_text
                         })
             
-            print(f"✅ Яндекс собран. Найдено УНИКАЛЬНЫХ отзывов: {len(data['yandex'])}")
+            print(f"✅ Яндекс собран. Уникальных: {len(data['yandex'])}")
 
         except Exception as e:
             print(f"⚠️ Ошибка Яндекса: {e}")
@@ -139,9 +132,11 @@ def run():
         
         browser.close()
 
+    # Записываем всё в файл, включая last_update
     with open(TV_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-    print("🚀 Файл tv_data.json готов!")
+        
+    print(f"🚀 Файл tv_data.json обновлен в {update_time}!")
 
 if __name__ == "__main__":
     run()
