@@ -141,8 +141,8 @@
             </div>
         </div>
     </div>
-
-    <script>
+    
+<script>
         // ФУНКЦИЯ «УШИВАНИЯ» ТЕКСТА ПОД РАЗМЕР КАРТОЧКИ
         function fitText(el) {
             let fontSize = 3; // Начинаем с 3vh
@@ -156,35 +156,40 @@
             }
         }
 
-       async function update() {
-    try {
-        const response = await fetch('tv_data.json?t=' + Date.now());
-        const data = await response.json();
-        
-        // Проверяем, что данные — это массивы, чтобы код не падал
-        const yandexList = Array.isArray(data.yandex) ? [...data.yandex].reverse() : [];
-        const gisList = Array.isArray(data.gis) ? [...data.gis].reverse() : [];
-
-        const map = [
-            {id: 'y1', d: yandexList[0]}, // Самый новый из Яндекса
-            {id: 'y2', d: yandexList[1]}, // Предпоследний из Яндекса
-            {id: 'g1', d: gisList[0]},    // Самый новый из 2ГИС
-            {id: 'g2', d: gisList[1]}     // Предпоследний из 2ГИС
-        ];
-
-        map.forEach(m => {
-            if (m.d) {
-                document.getElementById(m.id + '-author').innerText = m.d.author;
-                document.getElementById(m.id + '-loc').innerText = m.d.location;
-                document.getElementById(m.id + '-stars').innerText = m.d.stars;
+        async function update() {
+            try {
+                const response = await fetch('tv_data.json?t=' + Date.now());
+                const data = await response.json();
                 
-                const textEl = document.getElementById(m.id + '-text');
-                textEl.innerText = m.d.text;
-                
-                setTimeout(() => fitText(textEl), 50);
+                // Данные уже отсортированы в Питоне (самые свежие сверху), reverse НЕ НУЖЕН!
+                const yandexList = Array.isArray(data.yandex) ? data.yandex : [];
+                const gisList = Array.isArray(data.gis) ? data.gis : [];
+
+                const map = [
+                    {id: 'y1', d: yandexList[0]}, // Самый новый из Яндекса
+                    {id: 'y2', d: yandexList[1]}, // Предпоследний из Яндекса
+                    {id: 'g1', d: gisList[0]},    // Самый новый из 2ГИС
+                    {id: 'g2', d: gisList[1]}     // Предпоследний из 2ГИС
+                ];
+
+                map.forEach(m => {
+                    if (m.d) {
+                        document.getElementById(m.id + '-author').innerText = m.d.author;
+                        document.getElementById(m.id + '-loc').innerText = m.d.location;
+                        document.getElementById(m.id + '-stars').innerText = m.d.stars;
+                        
+                        const textEl = document.getElementById(m.id + '-text');
+                        textEl.innerText = m.d.text;
+                        
+                        setTimeout(() => fitText(textEl), 50);
+                    }
+                });
+            } catch(e) { 
+                console.error("Ошибка загрузки данных:", e); 
             }
-        });
-    } catch(e) { 
-        console.error("Ошибка загрузки данных:", e); 
-    }
-}
+        }
+
+        // ВАЖНО: ЭТИ СТРОЧКИ ЗАПУСКАЮТ СКРИПТ!
+        update(); // Запускаем сразу при открытии страницы
+        setInterval(update, 30000); // И потом повторяем каждые 30 секунд
+    </script>
