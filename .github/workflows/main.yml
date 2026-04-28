@@ -1,10 +1,9 @@
 name: Radar Automation
 
 on:
-  workflow_dispatch: # ВОТ ЭТА СТРОЧКА ВКЛЮЧАЕТ КНОПКУ
-
-schedule:
-    - cron: '0 * * * *' # Запуск ровно в начале каждого часа
+  workflow_dispatch: # Кнопка ручного запуска
+  schedule:
+    - cron: '0 * * * *' # Ежечасный запуск
 
 jobs:
   run-radar:
