@@ -2,8 +2,8 @@ name: Radar Automation
 
 on:
   schedule:
-    # Запуск каждый час в 17 минут (обходит пробки на серверах Гитхаба)
-    - cron: '17 * * * *'
+    - cron: '23 * * * *'
+  workflow_dispatch:
 
 # ДОБАВЬ ЭТИ ТРИ СТРОЧКИ, ЧТОБЫ PUSH НЕ БЛОКИРОВАЛСЯ:
 permissions:
