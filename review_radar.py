@@ -22,7 +22,7 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    print(f"[{datetime.now()}] Сбор данных (Исправленный JS)...")
+    print(f"[{datetime.now()}] Сбор данных (Исправленный текст)...")
     data = {"yandex": [], "gis": []}
 
     # 1. 2ГИС
@@ -58,7 +58,7 @@ def run():
             
             page.wait_for_timeout(5000)
             
-            # Нажимаем кнопки
+            # Нажимаем кнопки "Ещё"
             page.evaluate("""() => {
                 let reviews = document.querySelectorAll('.business-review-view');
                 reviews.forEach(review => {
@@ -72,39 +72,47 @@ def run():
             print("✅ Кнопки 'Ещё' нажаты")
             page.wait_for_timeout(2000)
 
-            # ВОТ ЗДЕСЬ ИСПРАВЛЕНА ОШИБКА (push вместо append)
+            # ИЗМЕНЕНА ЛОГИКА СБОРА ТЕКСТА: ДОБАВЛЕНЫ ВСЕ СЕЛЕКТОРЫ ИЗ ТВОЕГО SELENIUM
             extracted = page.evaluate("""() => {
                 let results = [];
-                let cards = document.querySelectorAll('.business-review-view');
+                let cards = document.querySelectorAll('.business-review-view, .business-reviews-card-view__review');
                 for (let i = 0; i < Math.min(2, cards.length); i++) {
                     let card = cards[i];
-                    let author = card.querySelector('.business-review-view__author-name')?.innerText || "Клиент";
-                    let text = card.querySelector('.business-review-view__body-text')?.innerText || "";
+                    
+                    // Автор
+                    let authorEl = card.querySelector('.business-review-view__author-name') || card.querySelector('[itemprop="name"]');
+                    let author = authorEl ? authorEl.innerText.trim() : "Клиент";
+                    
+                    // Текст (ищем по всем возможным классам Яндекса, как в старом коде)
+                    let textEl = card.querySelector('[itemprop="reviewBody"]') || 
+                                 card.querySelector('.business-review-view__body-text') || 
+                                 card.querySelector('.business-review-view__text') || 
+                                 card.querySelector('.business-reviews-card-view__review-text');
+                                 
+                    let text = textEl ? textEl.innerText.trim() : "";
+                    
+                    // ЖЕЛЕЗОБЕТОННАЯ СТРАХОВКА: если текст всё равно пустой, берем сырой текст карточки
+                    if (!text) {
+                         text = card.innerText.replace(author, '').trim().substring(0, 350) + "...";
+                    }
+
+                    // Оценка
                     let rating = "5";
                     let ratingMeta = card.querySelector('meta[itemprop="ratingValue"]');
                     if (ratingMeta) { rating = ratingMeta.getAttribute('content'); }
+                    
                     results.push({author, text, rating}); 
                 }
                 return results;
             }""")
             
-            if not extracted:
-                 texts = page.locator(".business-review-view__body-text").all_inner_texts()
-                 authors = page.locator(".business-review-view__author-name").all_inner_texts()
-                 for i in range(min(2, len(texts))):
-                     data["yandex"].append({
-                         "author": authors[i] if i < len(authors) else "Клиент",
-                         "location": "ул. Кирова, 146",
-                         "stars": "⭐️⭐️⭐️⭐️⭐️",
-                         "text": texts[i].strip()
-                     })
-            else:
+            if extracted:
                 for res in extracted:
                     data["yandex"].append({
                         "author": res['author'],
                         "location": "ул. Кирова, 146",
                         "stars": get_stars_emoji(res['rating']),
-                        "text": res['text'].strip()
+                        "text": res['text'].replace('\n', ' ').strip()
                     })
             
             print(f"✅ Яндекс собран. Найдено отзывов: {len(data['yandex'])}")
