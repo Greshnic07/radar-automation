@@ -22,7 +22,7 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    print(f"[{datetime.now()}] Сбор данных (Исправленный текст)...")
+    print(f"[{datetime.now()}] Сбор данных (Убираем дубликаты)...")
     data = {"yandex": [], "gis": []}
 
     # 1. 2ГИС
@@ -72,18 +72,16 @@ def run():
             print("✅ Кнопки 'Ещё' нажаты")
             page.wait_for_timeout(2000)
 
-            # ИЗМЕНЕНА ЛОГИКА СБОРА ТЕКСТА: ДОБАВЛЕНЫ ВСЕ СЕЛЕКТОРЫ ИЗ ТВОЕГО SELENIUM
+            # Собираем с запасом (5 штук), чтобы было из чего фильтровать
             extracted = page.evaluate("""() => {
                 let results = [];
                 let cards = document.querySelectorAll('.business-review-view, .business-reviews-card-view__review');
-                for (let i = 0; i < Math.min(2, cards.length); i++) {
+                for (let i = 0; i < Math.min(5, cards.length); i++) {
                     let card = cards[i];
                     
-                    // Автор
                     let authorEl = card.querySelector('.business-review-view__author-name') || card.querySelector('[itemprop="name"]');
                     let author = authorEl ? authorEl.innerText.trim() : "Клиент";
                     
-                    // Текст (ищем по всем возможным классам Яндекса, как в старом коде)
                     let textEl = card.querySelector('[itemprop="reviewBody"]') || 
                                  card.querySelector('.business-review-view__body-text') || 
                                  card.querySelector('.business-review-view__text') || 
@@ -91,12 +89,10 @@ def run():
                                  
                     let text = textEl ? textEl.innerText.trim() : "";
                     
-                    // ЖЕЛЕЗОБЕТОННАЯ СТРАХОВКА: если текст всё равно пустой, берем сырой текст карточки
                     if (!text) {
                          text = card.innerText.replace(author, '').trim().substring(0, 350) + "...";
                     }
 
-                    // Оценка
                     let rating = "5";
                     let ratingMeta = card.querySelector('meta[itemprop="ratingValue"]');
                     if (ratingMeta) { rating = ratingMeta.getAttribute('content'); }
@@ -107,15 +103,24 @@ def run():
             }""")
             
             if extracted:
+                seen_texts = set()
                 for res in extracted:
-                    data["yandex"].append({
-                        "author": res['author'],
-                        "location": "ул. Кирова, 146",
-                        "stars": get_stars_emoji(res['rating']),
-                        "text": res['text'].replace('\n', ' ').strip()
-                    })
+                    if len(data["yandex"]) >= 2:
+                        break # Хватит двух уникальных для экрана
+                        
+                    clean_text = res['text'].replace('\n', ' ').strip()
+                    
+                    # ПРОВЕРКА НА ДУБЛИКАТ
+                    if clean_text and clean_text not in seen_texts:
+                        seen_texts.add(clean_text)
+                        data["yandex"].append({
+                            "author": res['author'],
+                            "location": "ул. Кирова, 146",
+                            "stars": get_stars_emoji(res['rating']),
+                            "text": clean_text
+                        })
             
-            print(f"✅ Яндекс собран. Найдено отзывов: {len(data['yandex'])}")
+            print(f"✅ Яндекс собран. Найдено УНИКАЛЬНЫХ отзывов: {len(data['yandex'])}")
 
         except Exception as e:
             print(f"⚠️ Ошибка Яндекса: {e}")
