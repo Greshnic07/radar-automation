@@ -156,37 +156,35 @@
             }
         }
 
-        async function update() {
-            try {
-               // Берем копию списка, переворачиваем её и забираем первые два элемента (то есть последние из файла)
-const reversedYandex = [...data.yandex].reverse();
-const reversedGis = [...data.gis].reverse();
+       async function update() {
+    try {
+        const response = await fetch('tv_data.json?t=' + Date.now());
+        const data = await response.json();
+        
+        // Проверяем, что данные — это массивы, чтобы код не падал
+        const yandexList = Array.isArray(data.yandex) ? [...data.yandex].reverse() : [];
+        const gisList = Array.isArray(data.gis) ? [...data.gis].reverse() : [];
 
-const map = [
-    {id: 'y1', d: reversedYandex[0]}, // Самый новый
-    {id: 'y2', d: reversedYandex[1]}, // Предпоследний
-    {id: 'g1', d: reversedGis[0]},    // Самый новый
-    {id: 'g2', d: reversedGis[1]}     // Предпоследний
-];
+        const map = [
+            {id: 'y1', d: yandexList[0]}, // Самый новый из Яндекса
+            {id: 'y2', d: yandexList[1]}, // Предпоследний из Яндекса
+            {id: 'g1', d: gisList[0]},    // Самый новый из 2ГИС
+            {id: 'g2', d: gisList[1]}     // Предпоследний из 2ГИС
+        ];
 
-                map.forEach(m => {
-                    if (m.d) {
-                        document.getElementById(m.id + '-author').innerText = m.d.author;
-                        document.getElementById(m.id + '-loc').innerText = m.d.location;
-                        document.getElementById(m.id + '-stars').innerText = m.d.stars;
-                        
-                        const textEl = document.getElementById(m.id + '-text');
-                        textEl.innerText = m.d.text;
-                        
-                        // Даем браузеру отрисовать и подгоняем размер
-                        setTimeout(() => fitText(textEl), 50);
-                    }
-                });
-            } catch(e) { console.log("Waiting for json..."); }
-        }
-
-        setInterval(update, 30000);
-        update();
-    </script>
-</body>
-</html>
+        map.forEach(m => {
+            if (m.d) {
+                document.getElementById(m.id + '-author').innerText = m.d.author;
+                document.getElementById(m.id + '-loc').innerText = m.d.location;
+                document.getElementById(m.id + '-stars').innerText = m.d.stars;
+                
+                const textEl = document.getElementById(m.id + '-text');
+                textEl.innerText = m.d.text;
+                
+                setTimeout(() => fitText(textEl), 50);
+            }
+        });
+    } catch(e) { 
+        console.error("Ошибка загрузки данных:", e); 
+    }
+}
