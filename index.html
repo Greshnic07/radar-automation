@@ -158,13 +158,16 @@
 
         async function update() {
             try {
-                const response = await fetch('tv_data.json?t=' + Date.now());
-                const data = await response.json();
-                
-                const map = [
-                    {id: 'y1', d: data.yandex[0]}, {id: 'y2', d: data.yandex[1]},
-                    {id: 'g1', d: data.gis[0]},    {id: 'g2', d: data.gis[1]}
-                ];
+               // Берем копию списка, переворачиваем её и забираем первые два элемента (то есть последние из файла)
+const reversedYandex = [...data.yandex].reverse();
+const reversedGis = [...data.gis].reverse();
+
+const map = [
+    {id: 'y1', d: reversedYandex[0]}, // Самый новый
+    {id: 'y2', d: reversedYandex[1]}, // Предпоследний
+    {id: 'g1', d: reversedGis[0]},    // Самый новый
+    {id: 'g2', d: reversedGis[1]}     // Предпоследний
+];
 
                 map.forEach(m => {
                     if (m.d) {
