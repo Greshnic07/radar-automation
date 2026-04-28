@@ -26,15 +26,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install playwright pyotp
           
       - name: Install Playwright browsers
         run: playwright install chromium
 
       - name: Run Review Radar script
-        # Если используешь секреты, раскомментируй блок env ниже
-        # env:
-        #   LOGIN: ${{ secrets.MY_LOGIN }}
+        env:
+          MY_LOGIN: ${{ secrets.MY_LOGIN }}
+          MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
+          MY_TOTP: ${{ secrets.MY_TOTP }}
         run: python review_radar.py
 
       - name: Commit and push changes
