@@ -38,10 +38,10 @@ jobs:
           MY_TOTP: ${{ secrets.MY_TOTP }}
         run: python review_radar.py
 
-      - name: Commit and push changes
+     - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git commit -m "Update radar data" || echo "Ничего нового не нашлось"
+          git commit -m "Update radar data" || echo "Нет изменений для сохранения"
           git push || echo "Нечего пушить"
