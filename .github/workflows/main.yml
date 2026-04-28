@@ -39,10 +39,9 @@ jobs:
         run: python review_radar.py
 
       - name: Commit and push changes
-        # Этот шаг критически важен, если скрипт сохраняет какие-то файлы (например json с историей).
-        # Он берет новые данные и сохраняет их обратно в твой репозиторий.
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff-quiet && git diff-staged --quiet || (git commit -m "Update radar data" && git push)
+          git commit -m "Update radar data" || echo "Ничего нового не нашлось"
+          git push || echo "Нечего пушить"
