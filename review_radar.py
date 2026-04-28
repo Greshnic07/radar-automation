@@ -22,10 +22,10 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    print(f"[{datetime.now()}] Сбор данных (Бронебойный режим)...")
+    print(f"[{datetime.now()}] Сбор данных (Исправленный JS)...")
     data = {"yandex": [], "gis": []}
 
-    # 1. 2ГИС (Работает железно)
+    # 1. 2ГИС
     print("Собираем 2ГИС...")
     for name, firm_id in LOCATIONS_2GIS.items():
         try:
@@ -42,7 +42,7 @@ def run():
                     })
         except: continue
 
-    # 2. ЯНДЕКС (С твоей логикой Selenium)
+    # 2. ЯНДЕКС
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
@@ -56,10 +56,9 @@ def run():
             print("Заходим на Яндекс (ул. Кирова)...")
             page.goto("https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/", wait_until="domcontentloaded", timeout=60000)
             
-            # Ждем прогрузки и убираем куки
             page.wait_for_timeout(5000)
             
-            # ТВОЯ ЛОГИКА РАЗВЕРТЫВАНИЯ (через JS-инъекцию)
+            # Нажимаем кнопки
             page.evaluate("""() => {
                 let reviews = document.querySelectorAll('.business-review-view');
                 reviews.forEach(review => {
@@ -73,7 +72,7 @@ def run():
             print("✅ Кнопки 'Ещё' нажаты")
             page.wait_for_timeout(2000)
 
-            # ТВОЯ ЛОГИКА СБОРА (через JS-инъекцию для рейтинга)
+            # ВОТ ЗДЕСЬ ИСПРАВЛЕНА ОШИБКА (push вместо append)
             extracted = page.evaluate("""() => {
                 let results = [];
                 let cards = document.querySelectorAll('.business-review-view');
@@ -84,14 +83,12 @@ def run():
                     let rating = "5";
                     let ratingMeta = card.querySelector('meta[itemprop="ratingValue"]');
                     if (ratingMeta) { rating = ratingMeta.getAttribute('content'); }
-                    results.append({author, text, rating});
+                    results.push({author, text, rating}); 
                 }
                 return results;
             }""")
             
-            # Если JS вернул ошибку или пусто, попробуем старым методом
             if not extracted:
-                 # Резервный сбор если JS не сработал
                  texts = page.locator(".business-review-view__body-text").all_inner_texts()
                  authors = page.locator(".business-review-view__author-name").all_inner_texts()
                  for i in range(min(2, len(texts))):
@@ -114,14 +111,11 @@ def run():
 
         except Exception as e:
             print(f"⚠️ Ошибка Яндекса: {e}")
-            page.screenshot(path="yandex_fail.png")
-            # Если всё упало, заполняем заглушкой, чтобы экран не висел
             if not data["yandex"]:
-                data["yandex"] = [{"author": "Система", "location": "Яндекс", "stars": "⭐️⭐️⭐️⭐️⭐️", "text": "Яндекс временно недоступен. Проверьте логи."}]
+                data["yandex"] = [{"author": "Система", "location": "Яндекс", "stars": "⭐️⭐️⭐️⭐️⭐️", "text": "Яндекс временно недоступен."}]
         
         browser.close()
 
-    # Сохраняем результат
     with open(TV_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     print("🚀 Файл tv_data.json готов!")
