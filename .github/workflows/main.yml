@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '0 * * * *' # Ежечасный запуск
 
+# ДОБАВЬ ЭТИ ТРИ СТРОЧКИ, ЧТОБЫ PUSH НЕ БЛОКИРОВАЛСЯ:
+permissions:
+  contents: write
+
 jobs:
   run-radar:
     runs-on: ubuntu-latest
