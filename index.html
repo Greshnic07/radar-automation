@@ -12,16 +12,32 @@
             background: url('фон.jpg') no-repeat center center fixed;
             background-size: cover;
             font-family: 'Arial', sans-serif;
-            overflow: hidden; /* Запрещаем любую прокрутку */
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             padding: 2vh;
+        }
+        /* Блок со временем обновления под лого */
+        .update-info {
+            position: absolute;
+            top: 7vh;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff4444; /* Красный, как ты просил */
+            font-size: 2vh;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            background: rgba(255, 255, 255, 0.8);
+            padding: 0.5vh 2vw;
+            border-radius: 1vh;
+            z-index: 10;
         }
         .main-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 2vw;
             height: 100%;
+            margin-top: 2vh;
         }
         .column {
             display: flex;
@@ -45,12 +61,12 @@
             display: flex;
             flex-direction: column;
             gap: 2vh;
-            min-height: 0; /* Важно для flex-контейнеров */
+            min-height: 0;
         }
         .card {
             flex: 1;
             background: rgba(255, 255, 255, 0.95);
-            border: 0.6vh solid #ff6900; /* Жирная оранжевая рамка */
+            border: 0.6vh solid #ff6900;
             border-radius: 3vh;
             padding: 2vh;
             display: flex;
@@ -78,16 +94,15 @@
             align-self: flex-start;
         }
 
-        /* КОНТЕЙНЕР ДЛЯ ТЕКСТА, КОТОРЫЙ УМЕЕТ УМЕНЬШАТЬ ШРИФТ */
         .text-area {
             flex: 1;
             overflow: hidden;
             display: flex;
-            align-items: center; /* Центрируем короткие отзывы по вертикали */
+            align-items: center;
         }
         .review-text {
             width: 100%;
-            font-size: 3vh; /* Базовый размер, который будет уменьшаться */
+            font-size: 3vh;
             line-height: 1.3;
             color: #111;
             word-wrap: break-word;
@@ -95,6 +110,8 @@
     </style>
 </head>
 <body>
+
+    <div class="update-info" id="last-update">Обновление...</div>
 
     <div class="main-container">
         <div class="column">
@@ -142,14 +159,11 @@
         </div>
     </div>
     
-<script>
-        // ФУНКЦИЯ «УШИВАНИЯ» ТЕКСТА ПОД РАЗМЕР КАРТОЧКИ
+    <script>
         function fitText(el) {
-            let fontSize = 3; // Начинаем с 3vh
+            let fontSize = 3;
             el.style.fontSize = fontSize + "vh";
             const parent = el.parentElement;
-            
-            // Если текст выше чем его контейнер - уменьшаем по 0.1vh
             while (el.scrollHeight > parent.clientHeight && fontSize > 1.5) {
                 fontSize -= 0.1;
                 el.style.fontSize = fontSize + "vh";
@@ -161,15 +175,20 @@
                 const response = await fetch('tv_data.json?t=' + Date.now());
                 const data = await response.json();
                 
-                // Данные уже отсортированы в Питоне (самые свежие сверху), reverse НЕ НУЖЕН!
+                // Ставим время обновления
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
+                                now.getMinutes().toString().padStart(2, '0');
+                document.getElementById('last-update').innerText = "ОБНОВЛЕНО В " + timeStr;
+
                 const yandexList = Array.isArray(data.yandex) ? data.yandex : [];
                 const gisList = Array.isArray(data.gis) ? data.gis : [];
 
                 const map = [
-                    {id: 'y1', d: yandexList[0]}, // Самый новый из Яндекса
-                    {id: 'y2', d: yandexList[1]}, // Предпоследний из Яндекса
-                    {id: 'g1', d: gisList[0]},    // Самый новый из 2ГИС
-                    {id: 'g2', d: gisList[1]}     // Предпоследний из 2ГИС
+                    {id: 'y1', d: yandexList[0]},
+                    {id: 'y2', d: yandexList[1]},
+                    {id: 'g1', d: gisList[0]},
+                    {id: 'g2', d: gisList[1]}
                 ];
 
                 map.forEach(m => {
@@ -177,10 +196,8 @@
                         document.getElementById(m.id + '-author').innerText = m.d.author;
                         document.getElementById(m.id + '-loc').innerText = m.d.location;
                         document.getElementById(m.id + '-stars').innerText = m.d.stars;
-                        
                         const textEl = document.getElementById(m.id + '-text');
                         textEl.innerText = m.d.text;
-                        
                         setTimeout(() => fitText(textEl), 50);
                     }
                 });
@@ -189,7 +206,8 @@
             }
         }
 
-        // ВАЖНО: ЭТИ СТРОЧКИ ЗАПУСКАЮТ СКРИПТ!
-        update(); // Запускаем сразу при открытии страницы
-        setInterval(update, 30000); // И потом повторяем каждые 30 секунд
+        update();
+        setInterval(update, 30000);
     </script>
+</body>
+</html>
