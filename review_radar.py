@@ -3,11 +3,11 @@ import json
 import random
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth
 
 TV_DATA_FILE = "tv_data.json"
-PROXY_URL = os.environ.get("MY_PROXY")
 
+# Все точки Додо Пицца в Ижевске
 LOCATIONS_2GIS = {
     "50 лет ВЛКСМ": "https://2gis.ru/izhevsk/firm/70000001045878325/tab/reviews",
     "Кирова, 146": "https://2gis.ru/izhevsk/firm/70000001083938641/tab/reviews",
@@ -34,6 +34,7 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def human_scroll(page):
+    """Имитация чтения страницы реальным человеком"""
     for i in range(random.randint(2, 4)):
         page.mouse.wheel(0, random.randint(400, 800))
         page.wait_for_timeout(random.randint(1000, 2000))
@@ -41,24 +42,16 @@ def human_scroll(page):
 def run():
     now = datetime.now() + timedelta(hours=4)
     update_time = now.strftime("%H:%M")
-    print(f"[{update_time}] Сбор данных (Додо Пицца - ВСЕ ТОЧКИ)...")
+    print(f"[{update_time}] СТАРТ: Сбор отзывов Додо Пицца...")
     
-    if PROXY_URL:
-        print(f"🌐 Используем прокси: {PROXY_URL.split('@')[-1]}")
-    else:
-        print("⚠️ Прокси не задан, используем Stealth-маскировку Playwright")
-
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
     with sync_playwright() as p:
-        launch_args = {
-            "headless": True,
-            "args": ["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
-        }
-        if PROXY_URL:
-            launch_args["proxy"] = {"server": PROXY_URL}
-
-        browser = p.chromium.launch(**launch_args)
+        browser = p.chromium.launch(headless=True, args=[
+            "--disable-blink-features=AutomationControlled", 
+            "--no-sandbox", 
+            "--disable-dev-shm-usage"
+        ])
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             viewport={'width': 1366, 'height': 768},
@@ -66,13 +59,13 @@ def run():
         )
         page = context.new_page()
         
-        # 🟢 МАГИЯ ТУТ: Накидываем маскировку на страницу до перехода на сайт
-        stealth_sync(page)
+        # Накидываем маскировку под обычного юзера
+        stealth(page)
 
-        # --- ПАРСИМ 2ГИС ---
+        # --- 2ГИС ---
         for name, url in LOCATIONS_2GIS.items():
             try:
-                print(f"2ГИС -> {name}...")
+                print(f"Заходим в 2ГИС: {name}...")
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_timeout(3000)
                 human_scroll(page)
@@ -93,15 +86,17 @@ def run():
                         "author": res['author'], "location": name,
                         "stars": get_stars_emoji(res['rating']), "text": res['text'].replace('\n', ' ')
                     })
+                    print(f"✅ {name}: Отзыв взят")
                 else:
+                    print(f"⚠️ {name}: Не нашли отзыв (возможно капча)")
                     page.screenshot(path=f"error_2gis_{name}.png")
-            except Exception as e: 
-                print(f"⚠️ Пропуск 2ГИС: {name}")
+            except: 
+                print(f"❌ {name}: Ошибка загрузки")
 
-        # --- ПАРСИМ ЯНДЕКС ---
+        # --- ЯНДЕКС ---
         for name, url in LOCATIONS_YANDEX.items():
             try:
-                print(f"Яндекс -> {name}...")
+                print(f"Заходим в Яндекс: {name}...")
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_timeout(3000)
                 
@@ -109,7 +104,6 @@ def run():
                     let buttons = document.querySelectorAll('.business-review-view__body-expand, .business-review-view__expand');
                     buttons.forEach(b => b.click());
                 }""")
-                page.wait_for_timeout(1000)
                 
                 res = page.evaluate("""() => {
                     let card = document.querySelector('.business-review-view');
@@ -125,22 +119,21 @@ def run():
                         "author": res['author'], "location": name,
                         "stars": get_stars_emoji(res['rating']), "text": res['text'].replace('\n', ' ')
                     })
-                else:
-                    page.screenshot(path=f"error_yandex_{name}.png")
-            except Exception as e: 
-                print(f"⚠️ Пропуск Яндекс: {name}")
+                    print(f"✅ {name}: Отзыв взят")
+            except: 
+                print(f"❌ {name}: Ошибка Яндекса")
 
         browser.close()
 
+    # Перемешиваем и берем по 2 штуки
     random.shuffle(data["gis"])
     random.shuffle(data["yandex"])
-
     data["gis"] = data["gis"][:2]
     data["yandex"] = data["yandex"][:2]
 
     with open(TV_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-    print(f"🚀 Готово! Собрано точек: 2ГИС({len(data['gis'])}), Яндекс({len(data['yandex'])})")
+    print(f"🚀 Сбор окончен! 2ГИС: {len(data['gis'])}, Яндекс: {len(data['yandex'])}")
 
 if __name__ == "__main__":
     run()
