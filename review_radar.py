@@ -9,6 +9,7 @@ from playwright.sync_api import sync_playwright
 TV_DATA_FILE = "tv_data.json"
 GIS_API_KEY = os.environ.get("API_KEY", "37c04fe6-a560-4549-b459-0ce83ce384f3")
 
+# --- 2ГИС (API) ---
 LOCATIONS_2GIS_API = {
     "50 лет ВЛКСМ": "70000001045878325",
     "Кирова, 146": "70000001083938641",
@@ -18,7 +19,7 @@ LOCATIONS_2GIS_API = {
     "Молодежная": "70000001031336495"
 }
 
-# Возвращаем основные Карты Яндекса
+# --- ЯНДЕКС КАРТЫ (ОСНОВНЫЕ ССЫЛКИ) ---
 LOCATIONS_YANDEX = {
     "Кирова, 146": "https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/",
     "50 лет ВЛКСМ": "https://yandex.ru/maps/org/dodo_pitstsa/1726053880/reviews/",
@@ -43,7 +44,7 @@ def run():
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
     # ==========================================
-    # 1. 2ГИС (ЧЕРЕЗ БЕСПЛАТНЫЙ ПРОКСИ-ШЛЮЗ)
+    # 1. 2ГИС (ЧЕРЕЗ БРОНЕБОЙНЫЕ ШЛЮЗЫ)
     # ==========================================
     print("--- Сбор 2ГИС (Обход бана по IP) ---")
     for name, firm_id in LOCATIONS_2GIS_API.items():
@@ -59,41 +60,63 @@ def run():
             }
             full_url = api_url + "?" + urllib.parse.urlencode(params)
             
-            # Используем публичные CORS-шлюзы как бесплатные прокси!
+            # ТРИ разных бесплатных прокси-шлюза
             proxy_urls = [
-                f"https://api.allorigins.win/raw?url={urllib.parse.quote(full_url)}",
-                f"https://corsproxy.io/?url={urllib.parse.quote(full_url)}"
+                f"https://api.codetabs.com/v1/proxy?quest={urllib.parse.quote(full_url)}",
+                f"https://corsproxy.io/?url={urllib.parse.quote(full_url)}",
+                f"https://api.allorigins.win/raw?url={urllib.parse.quote(full_url)}"
             ]
             
             success = False
             for p_url in proxy_urls:
-                resp = requests.get(p_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15)
-                if resp.status_code == 200:
-                    reviews_data = resp.json().get("reviews", [])
-                    for rev in reviews_data[:2]:
-                        text = rev.get("text", "").replace("\n", " ").strip()
-                        if len(text) > 5:
-                            data["gis"].append({
-                                "author": rev["user"]["name"],
-                                "location": name,
-                                "stars": get_stars_emoji(rev.get("rating", 5)),
-                                "text": text
-                            })
-                    print(f"✅ 2ГИС {name}: пробито через шлюз")
-                    success = True
-                    break
-            
+                proxy_name = p_url.split('/')[2]
+                try:
+                    resp = requests.get(p_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15)
+                    
+                    if resp.status_code == 200:
+                        try:
+                            json_data = resp.json()
+                        except ValueError:
+                            print(f"⚠️ {proxy_name} вернул не JSON. Пробуем следующий...")
+                            continue
+
+                        if "reviews" in json_data:
+                            reviews_data = json_data["reviews"]
+                            if not reviews_data:
+                                print(f"⚠️ {proxy_name}: JSON получен, но список отзывов пуст!")
+                                continue
+                                
+                            for rev in reviews_data[:2]:
+                                text = rev.get("text", "").replace("\n", " ").strip()
+                                if len(text) > 5:
+                                    data["gis"].append({
+                                        "author": rev["user"]["name"],
+                                        "location": name,
+                                        "stars": get_stars_emoji(rev.get("rating", 5)),
+                                        "text": text
+                                    })
+                            print(f"✅ 2ГИС {name}: УСПЕХ через {proxy_name}")
+                            success = True
+                            break 
+                        else:
+                            print(f"⚠️ {proxy_name}: В JSON нет ключа 'reviews'.")
+                    else:
+                        print(f"⚠️ {proxy_name} вернул код {resp.status_code}")
+                
+                except requests.exceptions.RequestException:
+                    print(f"⚠️ {proxy_name} отвалился по таймауту.")
+
             if not success:
-                print(f"⚠️ 2ГИС {name}: Ошибка доступа к API")
+                print(f"❌ 2ГИС {name}: Все три шлюза не смогли пробить API.")
+                
         except Exception as e:
-            print(f"❌ 2ГИС {name}: {e}")
+            print(f"❌ 2ГИС {name}: Критическая ошибка: {e}")
 
     # ==========================================
-    # 2. ЯНДЕКС (БРАУЗЕР FIREFOX)
+    # 2. ЯНДЕКС (БРАУЗЕР)
     # ==========================================
-    print("--- Сбор Яндекс через Firefox ---")
+    print("--- Сбор Яндекс через браузер ---")
     with sync_playwright() as p:
-        # ЗАМЕНА CHROMIUM НА FIREFOX — ломаем скрипты Яндекса!
         browser = p.firefox.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
@@ -131,7 +154,7 @@ def run():
                     })
                     print(f"✅ Яндекс {name}: Отзыв взят")
                 else:
-                    print(f"⚠️ Яндекс {name}: Пусто (Скрин сохранен)")
+                    print(f"⚠️ Яндекс {name}: Пусто (Снова капча?)")
                     page.screenshot(path=f"error_yandex_{name}.png")
             except Exception as e: 
                 print(f"❌ Яндекс {name}: Ошибка")
