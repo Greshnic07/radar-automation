@@ -43,6 +43,12 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add *.png 2>/dev/null || true
-          git commit -am "Auto-update data" || echo "Nothing to commit"
+          # Добавляем JSON (он точно есть)
+          git add tv_data.json
+          # Добавляем картинки только если они реально существуют
+          if ls *.png 1> /dev/null 2>&1; then
+            git add *.png
+          fi
+          # Пушим изменения. Если ничего не поменялось, просто идем дальше
+          git commit -m "Auto-update data" || echo "Nothing to commit"
           git push
