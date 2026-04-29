@@ -3,7 +3,8 @@ import json
 import random
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth
+# Исправленный импорт функции маскировки
+from playwright_stealth import stealth_sync
 
 TV_DATA_FILE = "tv_data.json"
 
@@ -59,8 +60,8 @@ def run():
         )
         page = context.new_page()
         
-        # Накидываем маскировку под обычного юзера
-        stealth(page)
+        # Накидываем маскировку под обычного юзера через stealth_sync
+        stealth_sync(page)
 
         # --- 2ГИС ---
         for name, url in LOCATIONS_2GIS.items():
