@@ -38,10 +38,11 @@ jobs:
           MY_TOTP: ${{ secrets.MY_TOTP }}
         run: python review_radar.py
 
-      - name: Commit and push
+      - name: Commit and Push changes
+        if: always()
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add *.png
-          git commit -am "Update radar data" || echo "No changes to commit"
+          git add *.png 2>/dev/null || true
+          git commit -am "Auto-update data" || echo "Nothing to commit"
           git push
