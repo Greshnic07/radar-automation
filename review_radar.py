@@ -9,6 +9,9 @@ from playwright.sync_api import sync_playwright
 TV_DATA_FILE = "tv_data.json"
 GIS_API_KEY = os.environ.get("API_KEY", "37c04fe6-a560-4549-b459-0ce83ce384f3")
 
+# СЮДА ВСТАВЬ СВОЮ ССЫЛКУ ИЗ GOOGLE APPS SCRIPT
+GOOGLE_PROXY_URL = "https://script.google.com/macros/s/AKfycbw79K5QTYYKqc6t4TESPd65UaabDB424WhJU-87RvS0WVsRQFvtj_AYrzBh32IAEcUfZw/exec"
+
 # --- 2ГИС (API) ---
 LOCATIONS_2GIS_API = {
     "50 лет ВЛКСМ": "70000001045878325",
@@ -19,7 +22,7 @@ LOCATIONS_2GIS_API = {
     "Молодежная": "70000001031336495"
 }
 
-# --- ЯНДЕКС КАРТЫ (ОСНОВНЫЕ ССЫЛКИ) ---
+# --- ЯНДЕКС КАРТЫ ---
 LOCATIONS_YANDEX = {
     "Кирова, 146": "https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/",
     "50 лет ВЛКСМ": "https://yandex.ru/maps/org/dodo_pitstsa/1726053880/reviews/",
@@ -44,78 +47,47 @@ def run():
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
     # ==========================================
-    # 1. 2ГИС (ЧЕРЕЗ БРОНЕБОЙНЫЕ ШЛЮЗЫ)
+    # 1. 2ГИС (ЧЕРЕЗ GOOGLE PROXY)
     # ==========================================
-    print("--- Сбор 2ГИС (Обход бана по IP) ---")
+    print("--- Сбор 2ГИС через Google Apps Script ---")
     for name, firm_id in LOCATIONS_2GIS_API.items():
         try:
-            api_url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews"
-            params = {
-                "limit": "3",
-                "is_advertiser": "false",
-                "rated": "true",
-                "sort_by": "date_edited",
-                "key": GIS_API_KEY,
-                "locale": "ru_RU"
-            }
-            full_url = api_url + "?" + urllib.parse.urlencode(params)
+            api_url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews?limit=3&is_advertiser=false&rated=true&sort_by=date_edited&key={GIS_API_KEY}&locale=ru_RU"
             
-            # ТРИ разных бесплатных прокси-шлюза
-            proxy_urls = [
-                f"https://api.codetabs.com/v1/proxy?quest={urllib.parse.quote(full_url)}",
-                f"https://corsproxy.io/?url={urllib.parse.quote(full_url)}",
-                f"https://api.allorigins.win/raw?url={urllib.parse.quote(full_url)}"
-            ]
+            # Просим Гугл сходить за нас
+            encoded_target = urllib.parse.quote(api_url)
+            full_url = f"{GOOGLE_PROXY_URL}?url={encoded_target}"
             
-            success = False
-            for p_url in proxy_urls:
-                proxy_name = p_url.split('/')[2]
+            resp = requests.get(full_url, timeout=25)
+            
+            if resp.status_code == 200:
                 try:
-                    resp = requests.get(p_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15)
-                    
-                    if resp.status_code == 200:
-                        try:
-                            json_data = resp.json()
-                        except ValueError:
-                            print(f"⚠️ {proxy_name} вернул не JSON. Пробуем следующий...")
-                            continue
-
-                        if "reviews" in json_data:
-                            reviews_data = json_data["reviews"]
-                            if not reviews_data:
-                                print(f"⚠️ {proxy_name}: JSON получен, но список отзывов пуст!")
-                                continue
-                                
-                            for rev in reviews_data[:2]:
-                                text = rev.get("text", "").replace("\n", " ").strip()
-                                if len(text) > 5:
-                                    data["gis"].append({
-                                        "author": rev["user"]["name"],
-                                        "location": name,
-                                        "stars": get_stars_emoji(rev.get("rating", 5)),
-                                        "text": text
-                                    })
-                            print(f"✅ 2ГИС {name}: УСПЕХ через {proxy_name}")
-                            success = True
-                            break 
-                        else:
-                            print(f"⚠️ {proxy_name}: В JSON нет ключа 'reviews'.")
+                    json_data = resp.json()
+                    if "reviews" in json_data:
+                        reviews_list = json_data["reviews"]
+                        for rev in reviews_list[:2]:
+                            text = rev.get("text", "").replace("\n", " ").strip()
+                            if len(text) > 5:
+                                data["gis"].append({
+                                    "author": rev["user"]["name"],
+                                    "location": name,
+                                    "stars": get_stars_emoji(rev.get("rating", 5)),
+                                    "text": text
+                                })
+                        print(f"✅ 2ГИС {name}: УСПЕХ")
                     else:
-                        print(f"⚠️ {proxy_name} вернул код {resp.status_code}")
-                
-                except requests.exceptions.RequestException:
-                    print(f"⚠️ {proxy_name} отвалился по таймауту.")
-
-            if not success:
-                print(f"❌ 2ГИС {name}: Все три шлюза не смогли пробить API.")
-                
+                        print(f"⚠️ 2ГИС {name}: В ответе нет отзывов")
+                except:
+                    print(f"⚠️ 2ГИС {name}: Ошибка парсинга JSON (проверь ссылку Google)")
+            else:
+                print(f"⚠️ 2ГИС {name}: Ошибка Google Proxy ({resp.status_code})")
         except Exception as e:
-            print(f"❌ 2ГИС {name}: Критическая ошибка: {e}")
+            print(f"❌ 2ГИС {name}: {e}")
 
     # ==========================================
-    # 2. ЯНДЕКС (БРАУЗЕР)
+    # 2. ЯНДЕКС (БРАУЗЕР FIREFOX)
     # ==========================================
-    print("--- Сбор Яндекс через браузер ---")
+    print("--- Сбор Яндекс через Firefox ---")
     with sync_playwright() as p:
         browser = p.firefox.launch(headless=True)
         context = browser.new_context(
@@ -154,7 +126,7 @@ def run():
                     })
                     print(f"✅ Яндекс {name}: Отзыв взят")
                 else:
-                    print(f"⚠️ Яндекс {name}: Пусто (Снова капча?)")
+                    print(f"⚠️ Яндекс {name}: Пусто (Капча)")
                     page.screenshot(path=f"error_yandex_{name}.png")
             except Exception as e: 
                 print(f"❌ Яндекс {name}: Ошибка")
