@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 TV_DATA_FILE = "tv_data.json"
 
 # ВСТАВЬ СЮДА ССЫЛКУ, КОТОРУЮ ДАЛ ГУГЛ
-GOOGLE_PROXY = "ТВОЯ_ССЫЛКА_ОТ_ГУГЛА"
+GOOGLE_PROXY = "https://script.google.com/macros/s/AKfycbxlYbsz1tS7M_MIRwNZ1tPsf0r3Ik6Z7UYDs2HjdDGL_FZL9cSJtOwja30uJ6J2EABR/exec"
 
 LOCATIONS_2GIS = {
     "50 лет ВЛКСМ": "70000001045878325",
