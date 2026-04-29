@@ -26,7 +26,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright pyotp requests python-dotenv selenium
+          pip install playwright requests pyotp playwright-stealth
+          playwright install chromium
           
       - name: Install Playwright browsers
         run: playwright install chromium
