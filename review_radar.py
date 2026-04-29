@@ -2,11 +2,12 @@ import os
 import json
 import random
 import requests
+import re
 from datetime import datetime, timedelta
 
 TV_DATA_FILE = "tv_data.json"
 
-# ID филиалов (те же, что мы нашли раньше)
+# Используем ID филиалов для прямого поиска на Flamp (это тот же 2ГИС)
 LOCATIONS_2GIS = {
     "50 лет ВЛКСМ": "70000001045878325",
     "Кирова, 146": "70000001083938641",
@@ -16,6 +17,7 @@ LOCATIONS_2GIS = {
     "Молодежная": "70000001031336495"
 }
 
+# ID для Яндекса
 LOCATIONS_YANDEX = {
     "Кирова, 146": "215636523165",
     "50 лет ВЛКСМ": "1726053880",
@@ -25,71 +27,64 @@ LOCATIONS_YANDEX = {
     "Молодежная": "1205315808"
 }
 
-def get_stars_emoji(val):
-    try:
-        count = int(float(str(val).replace(',', '.')))
-        return "⭐️" * count
-    except: return "⭐️⭐️⭐️⭐️⭐️"
+def get_stars(val):
+    return "⭐️" * int(float(str(val).replace(',', '.'))) if val else "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
     now = datetime.now() + timedelta(hours=4)
     update_time = now.strftime("%H:%M")
-    print(f"[{update_time}] СТАРТ: Сбор через Shadow API...")
+    print(f"[{update_time}] СТАРТ: Глубокий поиск...")
     
     data = {"yandex": [], "gis": [], "last_update": update_time}
     s = requests.Session()
-    
-    # Маскируемся под обычный браузер
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    })
+    s.headers.update({"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1"})
 
-    # --- СБОР 2ГИС ---
-    print("Собираем 2ГИС...")
-    for name, firm_id in LOCATIONS_2GIS.items():
+    # --- 2ГИС через FLAMP (Обход защиты) ---
+    print("--- Сбор 2ГИС (через Flamp) ---")
+    for name, f_id in LOCATIONS_2GIS.items():
         try:
-            url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews"
-            params = {
-                "limit": 5, "is_advertiser": "false", "rated": "true",
-                "sort_by": "date_edited", "key": "37c04fe6-a560-4549-b459-0ce83ce384f3", "locale": "ru_RU"
-            }
-            # БЕЗ ЭТОГО REFERER БУДЕТ 403 ОШИБКА
-            r = s.get(url, params=params, headers={"Referer": "https://2gis.ru/"}, timeout=10)
+            # Flamp кушает те же ID, что и 2ГИС
+            url = f"https://izhevsk.flamp.ru/firm/dodo_picca_set_piccerijj-{f_id}"
+            r = s.get(url, timeout=15)
+            print(f"-> {name}: Статус {r.status_code}")
+            
             if r.status_code == 200:
-                reviews = r.json().get("reviews", [])
-                for rev in reviews[:2]:
-                    txt = rev.get("text", "").replace("\n", " ").strip()
-                    if len(txt) > 5:
-                        data["gis"].append({
-                            "author": rev["user"]["name"], "location": name,
-                            "stars": get_stars_emoji(rev.get("rating", 5)), "text": txt
-                        })
-                print(f"✅ 2ГИС {name}")
-        except: print(f"❌ 2ГИС {name}")
+                # Вытаскиваем отзывы через регулярку (самый быстрый способ)
+                texts = re.findall(r'"text":"([^"]+)"', r.text)
+                authors = re.findall(r'"name":"([^"]+)"', r.text)
+                if texts:
+                    data["gis"].append({
+                        "author": authors[1] if len(authors)>1 else "Клиент",
+                        "location": name,
+                        "stars": "⭐️⭐️⭐️⭐️⭐️",
+                        "text": texts[0][:150].replace('\\n', ' ')
+                    })
+                    print(f"   ✅ Нашли отзыв!")
+        except Exception as e: print(f"   ❌ Ошибка: {e}")
 
-    # --- СБОР ЯНДЕКС ---
-    print("Собираем Яндекс...")
+    # --- ЯНДЕКС через Мобильный Виджет ---
+    print("\n--- Сбор Яндекс (через Widget API) ---")
     for name, org_id in LOCATIONS_YANDEX.items():
         try:
-            # Стучимся в API виджета
             url = f"https://yandex.ru/maps-reviews-widget/v1/getReviews?orgId={org_id}&pageSize=5"
-            r = s.get(url, headers={"Referer": "https://yandex.ru/"}, timeout=10)
+            r = s.get(url, headers={"Referer": "https://yandex.ru/"}, timeout=15)
+            print(f"-> {name}: Статус {r.status_code}")
+            
             if r.status_code == 200:
-                # Яндекс отдает JSON внутри поля data
-                items = r.json().get("data", {}).get("reviews", [])
-                for item in items[:2]:
-                    txt = item.get("text", "").replace("\n", " ").strip()
-                    if len(txt) > 5:
-                        data["yandex"].append({
-                            "author": item.get("author", {}).get("name", "Клиент"),
-                            "location": name,
-                            "stars": get_stars_emoji(item.get("rating", 5)),
-                            "text": txt
-                        })
-                print(f"✅ Яндекс {name}")
-        except: print(f"❌ Яндекс {name}")
+                res = r.json()
+                reviews = res.get("data", {}).get("reviews", [])
+                if reviews:
+                    rev = reviews[0]
+                    data["yandex"].append({
+                        "author": rev.get("author", {}).get("name", "Клиент"),
+                        "location": name,
+                        "stars": get_stars(rev.get("rating", 5)),
+                        "text": rev.get("text", "")[:150].replace('\n', ' ')
+                    })
+                    print(f"   ✅ Нашли отзыв!")
+        except Exception as e: print(f"   ❌ Ошибка: {e}")
 
-    # Перемешиваем и сохраняем
+    # Финалим
     random.shuffle(data["gis"])
     random.shuffle(data["yandex"])
     data["gis"] = data["gis"][:2]
@@ -97,7 +92,7 @@ def run():
 
     with open(TV_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-    print(f"🚀 Готово! Собрано: 2ГИС({len(data['gis'])}), Яндекс({len(data['yandex'])})")
+    print(f"\n🚀 ИТОГ: 2ГИС({len(data['gis'])}), Яндекс({len(data['yandex'])})")
 
 if __name__ == "__main__":
     run()
