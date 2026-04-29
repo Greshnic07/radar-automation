@@ -1,21 +1,27 @@
 import os
 import json
 import random
+import requests
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 
 TV_DATA_FILE = "tv_data.json"
 
-# Все точки Додо Пицца в Ижевске
-LOCATIONS_2GIS = {
-    "50 лет ВЛКСМ": "https://2gis.ru/izhevsk/firm/70000001045878325/tab/reviews",
-    "Кирова, 146": "https://2gis.ru/izhevsk/firm/70000001083938641/tab/reviews",
-    "Удмуртская, 304": "https://2gis.ru/izhevsk/firm/70000001028907150/tab/reviews",
-    "9 Января, 219а": "https://2gis.ru/izhevsk/firm/70000001093448913/tab/reviews",
-    "ТЦ КИТ": "https://2gis.ru/izhevsk/firm/70000001042302381/tab/reviews",
-    "Молодежная": "https://2gis.ru/izhevsk/firm/70000001031336495/tab/reviews"
+# --- 2ГИС (МЕТОД МАКСИМА ЧЕРЕЗ API) ---
+# Это публичный ключ 2ГИС для веб-виджетов, он работает всегда
+GIS_API_KEY = os.environ.get("API_KEY", "37c04fe6-a560-4549-b459-0ce83ce384f3")
+
+# Я вытащил ID филиалов прямо из твоих ссылок
+LOCATIONS_2GIS_API = {
+    "50 лет ВЛКСМ": "70000001045878325",
+    "Кирова, 146": "70000001083938641",
+    "Удмуртская, 304": "70000001028907150",
+    "9 Января, 219а": "70000001093448913",
+    "ТЦ КИТ": "70000001042302381",
+    "Молодежная": "70000001031336495"
 }
 
+# --- ЯНДЕКС (ОСТАВЛЯЕМ БРАУЗЕР) ---
 LOCATIONS_YANDEX = {
     "Кирова, 146": "https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/",
     "50 лет ВЛКСМ": "https://yandex.ru/maps/org/dodo_pitstsa/1726053880/reviews/",
@@ -32,12 +38,6 @@ def get_stars_emoji(val):
     except:
         return "⭐️⭐️⭐️⭐️⭐️"
 
-def human_scroll(page):
-    """Имитация чтения страницы реальным человеком"""
-    for i in range(random.randint(2, 4)):
-        page.mouse.wheel(0, random.randint(400, 800))
-        page.wait_for_timeout(random.randint(1000, 2000))
-
 def run():
     now = datetime.now() + timedelta(hours=4)
     update_time = now.strftime("%H:%M")
@@ -45,6 +45,44 @@ def run():
     
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
+    # ==========================================
+    # 1. 2ГИС (ГЕНИАЛЬНЫЙ МЕТОД ЧЕРЕЗ API)
+    # ==========================================
+    print("--- Сбор 2ГИС через скрытое API ---")
+    for name, firm_id in LOCATIONS_2GIS_API.items():
+        try:
+            api_url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews"
+            params = {
+                "limit": 3,
+                "is_advertiser": "false",
+                "rated": "true",
+                "sort_by": "date_edited",
+                "key": GIS_API_KEY,
+                "locale": "ru_RU"
+            }
+            # Отправляем прямой запрос к серверу без браузера!
+            resp = requests.get(api_url, params=params, timeout=10)
+            if resp.status_code == 200:
+                reviews_data = resp.json().get("reviews", [])
+                for rev in reviews_data[:2]:
+                    text = rev.get("text", "").replace("\n", " ").strip()
+                    if len(text) > 5:
+                        data["gis"].append({
+                            "author": rev["user"]["name"],
+                            "location": name,
+                            "stars": get_stars_emoji(rev.get("rating", 5)),
+                            "text": text
+                        })
+                print(f"✅ 2ГИС {name}: получено через API")
+            else:
+                print(f"⚠️ 2ГИС {name}: ошибка API {resp.status_code}")
+        except Exception as e:
+            print(f"❌ 2ГИС {name}: {e}")
+
+    # ==========================================
+    # 2. ЯНДЕКС (БРАУЗЕР)
+    # ==========================================
+    print("--- Сбор Яндекс через браузер ---")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=[
             "--disable-blink-features=AutomationControlled", 
@@ -58,46 +96,11 @@ def run():
         )
         page = context.new_page()
         
-        # --- РУЧНАЯ МАСКИРОВКА (ЖЕЛЕЗОБЕТОННЫЙ СТЕЛС) ---
+        # Минимальная маскировка для Яндекса
         page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.navigator.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-            Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru']});
         """)
 
-        # --- 2ГИС ---
-        for name, url in LOCATIONS_2GIS.items():
-            try:
-                print(f"Заходим в 2ГИС: {name}...")
-                page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(3000)
-                human_scroll(page)
-                
-                res = page.evaluate("""() => {
-                    let card = document.querySelector('article'); 
-                    if (!card) return null;
-                    let author = card.querySelector('header span:first-child')?.innerText.trim() || "Клиент";
-                    let text = (card.querySelector('._j7emto') || card.querySelector('._192nvo0') || card.querySelector('._496d87'))?.innerText.trim() || "";
-                    let rating = 5;
-                    let stars = card.querySelector('._1f88pcy5') || card.querySelector('._1n8h0vx');
-                    if (stars && stars.style.width) rating = Math.round(parseInt(stars.style.width) / 20);
-                    return { author, text, rating };
-                }""")
-                
-                if res and res['text']:
-                    data["gis"].append({
-                        "author": res['author'], "location": name,
-                        "stars": get_stars_emoji(res['rating']), "text": res['text'].replace('\n', ' ')
-                    })
-                    print(f"✅ {name}: Отзыв взят")
-                else:
-                    print(f"⚠️ {name}: Не нашли отзыв (возможно капча)")
-                    page.screenshot(path=f"error_2gis_{name}.png")
-            except: 
-                print(f"❌ {name}: Ошибка загрузки")
-
-        # --- ЯНДЕКС ---
         for name, url in LOCATIONS_YANDEX.items():
             try:
                 print(f"Заходим в Яндекс: {name}...")
@@ -123,15 +126,18 @@ def run():
                         "author": res['author'], "location": name,
                         "stars": get_stars_emoji(res['rating']), "text": res['text'].replace('\n', ' ')
                     })
-                    print(f"✅ {name}: Отзыв взят")
-            except: 
-                print(f"❌ {name}: Ошибка Яндекса")
+                    print(f"✅ Яндекс {name}: Отзыв взят")
+                else:
+                    print(f"⚠️ Яндекс {name}: Пусто (Снова капча?)")
+            except Exception as e: 
+                print(f"❌ Яндекс {name}: Ошибка")
 
         browser.close()
 
-    # Перемешиваем и берем по 2 штуки
     random.shuffle(data["gis"])
     random.shuffle(data["yandex"])
+    
+    # Берем по 2 случайных отзыва для ТВ
     data["gis"] = data["gis"][:2]
     data["yandex"] = data["yandex"][:2]
 
