@@ -38,10 +38,10 @@ jobs:
           MY_TOTP: ${{ secrets.MY_TOTP }}
         run: python review_radar.py
 
-      - name: Commit and push changes
+      - name: Commit and push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add tv_data.json # Добавляем конкретно наш файл с данными
-          git commit -m "Update radar data: $(date)" || echo "No changes"
+          git add *.png
+          git commit -am "Update radar data" || echo "No changes to commit"
           git push
