@@ -2,12 +2,11 @@ import os
 import json
 import random
 import requests
+import urllib.parse
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 
 TV_DATA_FILE = "tv_data.json"
-
-# --- 2ГИС (АПИ) ---
 GIS_API_KEY = os.environ.get("API_KEY", "37c04fe6-a560-4549-b459-0ce83ce384f3")
 
 LOCATIONS_2GIS_API = {
@@ -19,15 +18,14 @@ LOCATIONS_2GIS_API = {
     "Молодежная": "70000001031336495"
 }
 
-# --- ЯНДЕКС (ВИДЖЕТЫ - БЕЗ КАПЧИ) ---
-# Я взял цифровые ID из твоих прошлых ссылок
-LOCATIONS_YANDEX_WIDGET = {
-    "Кирова, 146": "215636523165",
-    "50 лет ВЛКСМ": "1726053880",
-    "Удмуртская": "1325176045",
-    "9 Января": "170942637213",
-    "ТЦ КИТ": "1759491799",
-    "Молодежная": "1205315808"
+# Возвращаем основные Карты Яндекса
+LOCATIONS_YANDEX = {
+    "Кирова, 146": "https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/",
+    "50 лет ВЛКСМ": "https://yandex.ru/maps/org/dodo_pitstsa/1726053880/reviews/",
+    "Удмуртская": "https://yandex.ru/maps/org/dodo_pitstsa/1325176045/reviews/",
+    "9 Января": "https://yandex.ru/maps/org/dodo_pitstsa/170942637213/reviews/",
+    "ТЦ КИТ": "https://yandex.ru/maps/org/dodo_pitstsa/1759491799/reviews/",
+    "Молодежная": "https://yandex.ru/maps/org/dodo_pitstsa/1205315808/reviews/"
 }
 
 def get_stars_emoji(val):
@@ -45,83 +43,85 @@ def run():
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
     # ==========================================
-    # 1. 2ГИС (АПИ С МАСКИРОВКОЙ)
+    # 1. 2ГИС (ЧЕРЕЗ БЕСПЛАТНЫЙ ПРОКСИ-ШЛЮЗ)
     # ==========================================
-    print("--- Сбор 2ГИС через скрытое API ---")
-    
-    # ВОТ ОНИ, СПАСИТЕЛЬНЫЕ ЗАГОЛОВКИ! Без них сервер дает 403.
-    headers_2gis = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://2gis.ru/",
-        "Origin": "https://2gis.ru",
-        "Accept": "application/json"
-    }
-
+    print("--- Сбор 2ГИС (Обход бана по IP) ---")
     for name, firm_id in LOCATIONS_2GIS_API.items():
         try:
             api_url = f"https://public-api.reviews.2gis.com/2.0/branches/{firm_id}/reviews"
             params = {
-                "limit": 3,
+                "limit": "3",
                 "is_advertiser": "false",
                 "rated": "true",
                 "sort_by": "date_edited",
                 "key": GIS_API_KEY,
                 "locale": "ru_RU"
             }
-            resp = requests.get(api_url, params=params, headers=headers_2gis, timeout=10)
+            full_url = api_url + "?" + urllib.parse.urlencode(params)
             
-            if resp.status_code == 200:
-                reviews_data = resp.json().get("reviews", [])
-                for rev in reviews_data[:2]:
-                    text = rev.get("text", "").replace("\n", " ").strip()
-                    if len(text) > 5:
-                        data["gis"].append({
-                            "author": rev["user"]["name"],
-                            "location": name,
-                            "stars": get_stars_emoji(rev.get("rating", 5)),
-                            "text": text
-                        })
-                print(f"✅ 2ГИС {name}: получено через API")
-            else:
-                print(f"⚠️ 2ГИС {name}: ошибка API {resp.status_code}")
+            # Используем публичные CORS-шлюзы как бесплатные прокси!
+            proxy_urls = [
+                f"https://api.allorigins.win/raw?url={urllib.parse.quote(full_url)}",
+                f"https://corsproxy.io/?url={urllib.parse.quote(full_url)}"
+            ]
+            
+            success = False
+            for p_url in proxy_urls:
+                resp = requests.get(p_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15)
+                if resp.status_code == 200:
+                    reviews_data = resp.json().get("reviews", [])
+                    for rev in reviews_data[:2]:
+                        text = rev.get("text", "").replace("\n", " ").strip()
+                        if len(text) > 5:
+                            data["gis"].append({
+                                "author": rev["user"]["name"],
+                                "location": name,
+                                "stars": get_stars_emoji(rev.get("rating", 5)),
+                                "text": text
+                            })
+                    print(f"✅ 2ГИС {name}: пробито через шлюз")
+                    success = True
+                    break
+            
+            if not success:
+                print(f"⚠️ 2ГИС {name}: Ошибка доступа к API")
         except Exception as e:
             print(f"❌ 2ГИС {name}: {e}")
 
     # ==========================================
-    # 2. ЯНДЕКС (ДЫРА ЧЕРЕЗ ВИДЖЕТЫ)
+    # 2. ЯНДЕКС (БРАУЗЕР FIREFOX)
     # ==========================================
-    print("--- Сбор Яндекс через Виджеты ---")
+    print("--- Сбор Яндекс через Firefox ---")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        # ЗАМЕНА CHROMIUM НА FIREFOX — ломаем скрипты Яндекса!
+        browser = p.firefox.launch(headless=True)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            viewport={'width': 1000, 'height': 800}
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+            viewport={'width': 1366, 'height': 768},
+            locale="ru-RU"
         )
         page = context.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
 
-        for name, org_id in LOCATIONS_YANDEX_WIDGET.items():
+        for name, url in LOCATIONS_YANDEX.items():
             try:
-                # ИДЕМ НЕ НА КАРТЫ, А НА СТРАНИЦУ ВИДЖЕТА!
-                url = f"https://yandex.ru/maps-reviews-widget/{org_id}?comments"
-                print(f"Заходим в Яндекс Виджет: {name}...")
+                print(f"Заходим в Яндекс: {name}...")
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_timeout(3500)
                 
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page.wait_for_timeout(2000) # Даем виджету прогрузиться
+                page.evaluate("""() => {
+                    let buttons = document.querySelectorAll('.business-review-view__body-expand, .business-review-view__expand');
+                    buttons.forEach(b => b.click());
+                }""")
+                page.wait_for_timeout(1000)
                 
-                # Парсим виджет (у него другая структура HTML, более простая)
                 res = page.evaluate("""() => {
-                    // Ищем любые блоки с отзывами
-                    let cards = document.querySelectorAll('div[class*="review"], .we-review');
-                    for (let card of cards) {
-                        let author = card.querySelector('[class*="name"], [class*="author"]')?.innerText.trim() || "Клиент";
-                        let text = card.querySelector('[class*="text"]')?.innerText.trim() || "";
-                        
-                        // Если есть нормальный текст, забираем
-                        if (text.length > 15) {
-                            return { author, text, rating: 5 }; // Ставим 5 звезд по умолчанию для упрощения
-                        }
-                    }
-                    return null;
+                    let card = document.querySelector('.business-review-view');
+                    if (!card) return null;
+                    let author = card.querySelector('.business-review-view__author-name')?.innerText.trim() || "Клиент";
+                    let text = card.querySelector('.business-review-view__body-text')?.innerText.trim() || "";
+                    let stars = card.querySelectorAll('.business-rating-badge-view__star._filled').length || 5;
+                    return { author, text, rating: stars };
                 }""")
                 
                 if res and res['text']:
@@ -129,16 +129,15 @@ def run():
                         "author": res['author'], "location": name,
                         "stars": get_stars_emoji(res['rating']), "text": res['text'].replace('\n', ' ')
                     })
-                    print(f"✅ Яндекс {name}: Отзыв взят из виджета")
+                    print(f"✅ Яндекс {name}: Отзыв взят")
                 else:
-                    print(f"⚠️ Яндекс {name}: Пусто (Скриншот сохранен)")
-                    page.screenshot(path=f"error_yandex_widget_{org_id}.png")
+                    print(f"⚠️ Яндекс {name}: Пусто (Скрин сохранен)")
+                    page.screenshot(path=f"error_yandex_{name}.png")
             except Exception as e: 
-                print(f"❌ Яндекс {name}: Ошибка загрузки виджета")
+                print(f"❌ Яндекс {name}: Ошибка")
 
         browser.close()
 
-    # Перемешиваем и берем по 2 случайных для ТВ
     random.shuffle(data["gis"])
     random.shuffle(data["yandex"])
     data["gis"] = data["gis"][:2]
