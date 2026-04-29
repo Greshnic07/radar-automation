@@ -3,8 +3,6 @@ import json
 import random
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
-# Исправленный импорт функции маскировки
-from playwright_stealth import stealth_sync
 
 TV_DATA_FILE = "tv_data.json"
 
@@ -60,8 +58,13 @@ def run():
         )
         page = context.new_page()
         
-        # Накидываем маскировку под обычного юзера через stealth_sync
-        stealth_sync(page)
+        # --- РУЧНАЯ МАСКИРОВКА (ЖЕЛЕЗОБЕТОННЫЙ СТЕЛС) ---
+        page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+            Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU', 'ru']});
+        """)
 
         # --- 2ГИС ---
         for name, url in LOCATIONS_2GIS.items():
