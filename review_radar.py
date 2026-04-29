@@ -22,7 +22,7 @@ def get_stars_emoji(val):
         return "⭐️⭐️⭐️⭐️⭐️"
 
 def run():
-    # UTC+4 для Ижевска/Сарапула
+    # Фиксируем время Ижевска/Сарапула
     now = datetime.now() + timedelta(hours=4)
     update_time = now.strftime("%H:%M")
     
@@ -30,11 +30,10 @@ def run():
     
     data = {"yandex": [], "gis": [], "last_update": update_time}
 
-    # 1. 2ГИС (Исправленный блок)
+    # 1. 2ГИС
     print("Собираем 2ГИС...")
     all_gis = []
     
-    # Заголовки, чтобы 2ГИС не слал нахер (403 Forbidden)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://2gis.ru/",
@@ -47,7 +46,8 @@ def run():
             r = requests.get(url, headers=headers, timeout=10)
             
             if r.status_code == 200:
-                revs = r.json().get("reviews", [])
+                resp_json = r.json()
+                revs = resp_json.get("reviews", [])
                 if revs:
                     all_gis.append({
                         "author": revs[0].get("user", {}).get("name", "Клиент"),
@@ -56,7 +56,10 @@ def run():
                         "text": revs[0].get("text", "").replace("\n", " "),
                         "date": revs[0].get("date_created", "") 
                     })
-                print(f"✅ 2ГИС: {name} - ок")
+                    print(f"✅ 2ГИС: {name} - ок")
+                else:
+                    # Если статус 200, но отзывов нет (чтобы было видно в логах Гитхаба)
+                    print(f"⚠️ 2ГИС: {name} - пусто (ответ: {str(resp_json)[:100]})")
             else:
                 print(f"⚠️ 2ГИС: {name} ошибка {r.status_code}")
         except Exception as e: 
@@ -69,12 +72,15 @@ def run():
             item.pop("date", None)
             data["gis"].append(item)
     else:
-        # Заглушка, если всё упало
         data["gis"] = [{"author": "Система", "location": "2ГИС", "stars": "⭐️⭐️⭐️⭐️⭐️", "text": "Обновление 2ГИС временно недоступно."}]
 
     # 2. ЯНДЕКС
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # Добавил защиту от палева AutomationControlled
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             viewport={'width': 1280, 'height': 1200},
@@ -85,29 +91,52 @@ def run():
         try:
             print("Заходим на Яндекс (ул. Кирова)...")
             page.goto("https://yandex.ru/maps/org/dodo_pitstsa/215636523165/reviews/", wait_until="domcontentloaded", timeout=60000)
+            
             page.wait_for_timeout(5000)
             
-            # Разворачиваем отзывы
+            # Твой старый кликер по кнопкам
             page.evaluate("""() => {
-                let buttons = document.querySelectorAll('.business-review-view__body-expand, .business-review-view__expand');
-                buttons.forEach(b => b.click());
+                let reviews = document.querySelectorAll('.business-review-view');
+                reviews.forEach(review => {
+                    let clickables = review.querySelectorAll('span, a, div, button');
+                    for (let el of clickables) {
+                        let txt = el.textContent.trim();
+                        if (txt === 'Читать целиком' || txt === 'Ещё' || txt === 'Развернуть') { el.click(); }
+                    }
+                });
             }""")
+            print("✅ Кнопки 'Ещё' нажаты")
             page.wait_for_timeout(2000)
 
+            # ТВОЯ СТАРАЯ ЖЕЛЕЗНАЯ ЛОГИКА ПАРСИНГА
             extracted = page.evaluate("""() => {
                 let results = [];
-                let cards = document.querySelectorAll('.business-review-view');
-                for (let i = 0; i < Math.min(10, cards.length); i++) {
+                let cards = document.querySelectorAll('.business-review-view, .business-reviews-card-view__review');
+                for (let i = 0; i < Math.min(5, cards.length); i++) {
                     let card = cards[i];
-                    let authorEl = card.querySelector('.business-review-view__author-name');
+                    let authorEl = card.querySelector('.business-review-view__author-name') || card.querySelector('[itemprop="name"]');
                     let author = authorEl ? authorEl.innerText.trim() : "Клиент";
-                    let textEl = card.querySelector('.business-review-view__body-text');
-                    let text = textEl ? textEl.innerText.trim() : "";
-                    let rating = "5";
-                    let stars = card.querySelectorAll('.business-rating-badge-view__star._filled').length;
-                    if (stars > 0) rating = stars;
                     
-                    if (text.length > 10) {
+                    let textEl = card.querySelector('[itemprop="reviewBody"]') || 
+                                 card.querySelector('.business-review-view__body-text') || 
+                                 card.querySelector('.business-review-view__text') || 
+                                 card.querySelector('.business-reviews-card-view__review-text');
+                    let text = textEl ? textEl.innerText.trim() : "";
+                    
+                    if (!text) {
+                         text = card.innerText.replace(author, '').trim().substring(0, 350) + "...";
+                    }
+                    
+                    let rating = "5";
+                    let ratingMeta = card.querySelector('meta[itemprop="ratingValue"]');
+                    if (ratingMeta) { 
+                        rating = ratingMeta.getAttribute('content'); 
+                    } else {
+                        let stars = card.querySelectorAll('.business-rating-badge-view__star._filled').length;
+                        if (stars > 0) rating = stars.toString();
+                    }
+                    
+                    if (text.length > 5) {
                         results.push({author, text, rating});
                     }
                 }
@@ -136,7 +165,6 @@ def run():
         
         browser.close()
 
-    # Сохраняем результат
     with open(TV_DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
         
